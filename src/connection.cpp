@@ -1,4 +1,22 @@
 #include "connection.h"
+#include <thread>
+
+inline Napi::Value ConvertField(Napi::Env env, const pqxx::field& field, int type) {
+    if (field.is_null()) return env.Null();
+    
+    switch (type) {
+        case 23: case 20: case 21: // int4, int8, int2
+            return Napi::Number::New(env, field.as<long long>());
+        case 16: // bool
+            return Napi::Boolean::New(env, field.as<bool>());
+        case 17: // bytea
+            return Napi::Buffer<uint8_t>::Copy(env, (uint8_t*)field.c_str(), field.size());
+        case 700: case 701: // float4, float8
+            return Napi::Number::New(env, field.as<double>());
+        default: // text, varchar, etc
+            return Napi::String::New(env, field.c_str(), field.size());
+    }
+}
 
 struct QueryWorker : Napi::AsyncWorker {
     std::shared_ptr<ConnectionPool> pool;
@@ -12,9 +30,22 @@ struct QueryWorker : Napi::AsyncWorker {
     
     void Execute() override {
         auto conn = pool->acquire();
-        pqxx::work txn(*conn);
-        result = params.empty() ? txn.exec(sql) : txn.exec_params(sql, pqxx::prepare::make_dynamic_params(params));
-        txn.commit();
+        
+        // Use nontransaction for SELECT queries (faster)
+        bool isSelect = sql.size() >= 6 && 
+                       (sql[0] == 'S' || sql[0] == 's') &&
+                       (sql[1] == 'E' || sql[1] == 'e') &&
+                       (sql[2] == 'L' || sql[2] == 'l');
+        
+        if (isSelect) {
+            pqxx::nontransaction txn(*conn);
+            result = params.empty() ? txn.exec(sql) : txn.exec_params(sql, pqxx::prepare::make_dynamic_params(params));
+        } else {
+            pqxx::work txn(*conn);
+            result = params.empty() ? txn.exec(sql) : txn.exec_params(sql, pqxx::prepare::make_dynamic_params(params));
+            txn.commit();
+        }
+        
         pool->release(conn);
     }
     
@@ -35,32 +66,7 @@ struct QueryWorker : Napi::AsyncWorker {
             const auto& dbRow = result[i];
             
             for (size_t j = 0; j < colCount; ++j) {
-                const auto& field = dbRow[j];
-                const char* colName = result.column_name(j);
-                
-                if (field.is_null()) {
-                    row.Set(colName, env.Null());
-                } else {
-                    int type = result.column_type(j);
-                    switch (type) {
-                        case 23: case 20: case 21: // int4, int8, int2
-                            row.Set(colName, Napi::Number::New(env, field.as<long long>()));
-                            break;
-                        case 16: // bool
-                            row.Set(colName, Napi::Boolean::New(env, field.as<bool>()));
-                            break;
-                        case 17: { // bytea
-                            auto buf = Napi::Buffer<uint8_t>::Copy(env, (uint8_t*)field.c_str(), field.size());
-                            row.Set(colName, buf);
-                            break;
-                        }
-                        case 700: case 701: // float4, float8
-                            row.Set(colName, Napi::Number::New(env, field.as<double>()));
-                            break;
-                        default: // text, varchar, etc
-                            row.Set(colName, Napi::String::New(env, field.c_str(), field.size()));
-                    }
-                }
+                row.Set(result.column_name(j), ConvertField(env, dbRow[j], result.column_type(j)));
             }
             rows[i] = row;
         }
@@ -150,8 +156,9 @@ Napi::Value Connection::Query(const Napi::CallbackInfo& info) {
     std::vector<std::string> params;
     if (info.Length() > 1 && info[1].IsArray()) {
         auto arr = info[1].As<Napi::Array>();
-        params.reserve(arr.Length());
-        for (uint32_t i = 0; i < arr.Length(); ++i) {
+        uint32_t len = arr.Length();
+        params.reserve(len);
+        for (uint32_t i = 0; i < len; ++i) {
             auto val = arr.Get(i);
             if (val.IsString()) {
                 params.emplace_back(val.As<Napi::String>().Utf8Value());
@@ -188,8 +195,9 @@ Napi::Value Connection::Execute(const Napi::CallbackInfo& info) {
     std::vector<std::string> params;
     if (info.Length() > 1 && info[1].IsArray()) {
         auto arr = info[1].As<Napi::Array>();
-        params.reserve(arr.Length());
-        for (uint32_t i = 0; i < arr.Length(); ++i) {
+        uint32_t len = arr.Length();
+        params.reserve(len);
+        for (uint32_t i = 0; i < len; ++i) {
             auto val = arr.Get(i);
             if (val.IsString()) {
                 params.emplace_back(val.As<Napi::String>().Utf8Value());
@@ -210,8 +218,9 @@ Napi::Value Connection::Pipeline(const Napi::CallbackInfo& info) {
     auto queries = info[0].As<Napi::Array>();
     
     std::vector<std::string> queryList;
-    queryList.reserve(queries.Length());
-    for (uint32_t i = 0; i < queries.Length(); ++i) {
+    uint32_t len = queries.Length();
+    queryList.reserve(len);
+    for (uint32_t i = 0; i < len; ++i) {
         queryList.emplace_back(queries.Get(i).As<Napi::String>().Utf8Value());
     }
     

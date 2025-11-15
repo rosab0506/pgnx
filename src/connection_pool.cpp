@@ -2,7 +2,9 @@
 
 ConnectionPool::ConnectionPool(const std::string& connStr, size_t poolSize)
     : connStr_(connStr), poolSize_(poolSize), currentSize_(0) {
-    // Don't create connections upfront - create on demand
+    // Pre-create one connection for faster first query
+    available_.push(std::make_shared<pqxx::connection>(connStr_));
+    currentSize_ = 1;
 }
 
 ConnectionPool::~ConnectionPool() {
@@ -12,21 +14,18 @@ ConnectionPool::~ConnectionPool() {
 std::shared_ptr<pqxx::connection> ConnectionPool::acquire() {
     std::unique_lock<std::mutex> lock(mutex_);
     
-    // If available connection exists, return it
     if (!available_.empty()) {
         auto conn = available_.front();
         available_.pop();
         return conn;
     }
     
-    // If we can create more connections, create one
     if (currentSize_ < poolSize_ && !closed_) {
         currentSize_++;
         lock.unlock();
         return std::make_shared<pqxx::connection>(connStr_);
     }
     
-    // Wait for a connection to become available
     cv_.wait(lock, [this] { return !available_.empty() || closed_; });
     if (closed_) return nullptr;
     auto conn = available_.front();
@@ -35,8 +34,10 @@ std::shared_ptr<pqxx::connection> ConnectionPool::acquire() {
 }
 
 void ConnectionPool::release(std::shared_ptr<pqxx::connection> conn) {
+    if (!conn || !conn->is_open()) return;
+    
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!closed_ && conn && conn->is_open()) {
+    if (!closed_) {
         available_.push(conn);
         cv_.notify_one();
     }
