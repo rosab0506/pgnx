@@ -1,22 +1,4 @@
 #include "connection.h"
-#include <thread>
-
-inline Napi::Value ConvertField(Napi::Env env, const pqxx::field& field, int type) {
-    if (field.is_null()) return env.Null();
-    
-    switch (type) {
-        case 23: case 20: case 21: // int4, int8, int2
-            return Napi::Number::New(env, field.as<long long>());
-        case 16: // bool
-            return Napi::Boolean::New(env, field.as<bool>());
-        case 17: // bytea
-            return Napi::Buffer<uint8_t>::Copy(env, (uint8_t*)field.c_str(), field.size());
-        case 700: case 701: // float4, float8
-            return Napi::Number::New(env, field.as<double>());
-        default: // text, varchar, etc
-            return Napi::String::New(env, field.c_str(), field.size());
-    }
-}
 
 struct QueryWorker : Napi::AsyncWorker {
     std::shared_ptr<ConnectionPool> pool;
@@ -24,56 +6,59 @@ struct QueryWorker : Napi::AsyncWorker {
     std::vector<std::string> params;
     pqxx::result result;
     Napi::Promise::Deferred deferred;
+    std::shared_ptr<pqxx::connection> conn;
     
     QueryWorker(Napi::Env env, std::shared_ptr<ConnectionPool> p, std::string s, std::vector<std::string> prm, Napi::Promise::Deferred d)
         : AsyncWorker(env), pool(p), sql(std::move(s)), params(std::move(prm)), deferred(d) {}
     
     void Execute() override {
-        auto conn = pool->acquire();
+        conn = pool->acquire();
+        if (!conn) return;
         
-        // Use nontransaction for SELECT queries (faster)
-        bool isSelect = sql.size() >= 6 && 
-                       (sql[0] == 'S' || sql[0] == 's') &&
-                       (sql[1] == 'E' || sql[1] == 'e') &&
-                       (sql[2] == 'L' || sql[2] == 'l');
-        
-        if (isSelect) {
+        try {
             pqxx::nontransaction txn(*conn);
             result = params.empty() ? txn.exec(sql) : txn.exec_params(sql, pqxx::prepare::make_dynamic_params(params));
-        } else {
-            pqxx::work txn(*conn);
-            result = params.empty() ? txn.exec(sql) : txn.exec_params(sql, pqxx::prepare::make_dynamic_params(params));
-            txn.commit();
-        }
-        
-        pool->release(conn);
+        } catch (...) {}
     }
     
     void OnOK() override {
+        pool->release(conn);
+        
         auto env = Env();
         size_t rowCount = result.size();
         auto rows = Napi::Array::New(env, rowCount);
         
-        if (rowCount == 0) {
-            deferred.Resolve(rows);
-            return;
-        }
-        
-        size_t colCount = result.columns();
-        
-        for (size_t i = 0; i < rowCount; ++i) {
-            auto row = Napi::Object::New(env);
-            const auto& dbRow = result[i];
-            
-            for (size_t j = 0; j < colCount; ++j) {
-                row.Set(result.column_name(j), ConvertField(env, dbRow[j], result.column_type(j)));
+        if (rowCount > 0) {
+            size_t colCount = result.columns();
+            for (size_t i = 0; i < rowCount; ++i) {
+                auto row = Napi::Object::New(env);
+                for (size_t j = 0; j < colCount; ++j) {
+                    const auto& field = result[i][j];
+                    const char* name = result.column_name(j);
+                    
+                    if (!field.is_null()) {
+                        int type = result.column_type(j);
+                        if (type == 23 || type == 20 || type == 21) {
+                            row.Set(name, Napi::Number::New(env, field.as<long long>()));
+                        } else if (type == 16) {
+                            row.Set(name, Napi::Boolean::New(env, field.as<bool>()));
+                        } else if (type == 700 || type == 701) {
+                            row.Set(name, Napi::Number::New(env, field.as<double>()));
+                        } else {
+                            row.Set(name, Napi::String::New(env, field.c_str(), field.size()));
+                        }
+                    } else {
+                        row.Set(name, env.Null());
+                    }
+                }
+                rows[i] = row;
             }
-            rows[i] = row;
         }
         deferred.Resolve(rows);
     }
     
     void OnError(const Napi::Error& e) override {
+        if (conn) pool->release(conn);
         deferred.Reject(e.Value());
     }
 };
@@ -83,31 +68,28 @@ struct PipelineWorker : Napi::AsyncWorker {
     std::vector<std::string> queries;
     std::vector<size_t> affected;
     Napi::Promise::Deferred deferred;
+    std::shared_ptr<pqxx::connection> conn;
     
     PipelineWorker(Napi::Env env, std::shared_ptr<ConnectionPool> p, std::vector<std::string> q, Napi::Promise::Deferred d)
         : AsyncWorker(env), pool(p), queries(std::move(q)), deferred(d) {}
     
     void Execute() override {
-        auto conn = pool->acquire();
-        pqxx::work txn(*conn);
-        pqxx::pipeline pipe(txn);
-        std::vector<pqxx::pipeline::query_id> ids;
-        ids.reserve(queries.size());
+        conn = pool->acquire();
+        if (!conn) return;
         
-        for (const auto& sql : queries) {
-            ids.push_back(pipe.insert(sql));
-        }
-        pipe.complete();
-        
-        affected.reserve(ids.size());
-        for (auto id : ids) {
-            affected.push_back(pipe.retrieve(id).affected_rows());
-        }
-        txn.commit();
-        pool->release(conn);
+        try {
+            pqxx::nontransaction txn(*conn);
+            affected.reserve(queries.size());
+            for (const auto& sql : queries) {
+                auto res = txn.exec(sql);
+                affected.push_back(res.affected_rows());
+            }
+        } catch (...) {}
     }
     
     void OnOK() override {
+        pool->release(conn);
+        
         auto env = Env();
         auto results = Napi::Array::New(env, affected.size());
         for (size_t i = 0; i < affected.size(); ++i) {
@@ -117,6 +99,7 @@ struct PipelineWorker : Napi::AsyncWorker {
     }
     
     void OnError(const Napi::Error& e) override {
+        if (conn) pool->release(conn);
         deferred.Reject(e.Value());
     }
 };

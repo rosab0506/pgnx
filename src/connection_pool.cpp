@@ -2,9 +2,14 @@
 
 ConnectionPool::ConnectionPool(const std::string& connStr, size_t poolSize)
     : connStr_(connStr), poolSize_(poolSize), currentSize_(0) {
-    // Pre-create one connection for faster first query
-    available_.push(std::make_shared<pqxx::connection>(connStr_));
-    currentSize_ = 1;
+    // Create initial connection
+    try {
+        auto conn = std::make_shared<pqxx::connection>(connStr_);
+        if (conn->is_open()) {
+            available_.push(conn);
+            currentSize_ = 1;
+        }
+    } catch (...) {}
 }
 
 ConnectionPool::~ConnectionPool() {
@@ -12,25 +17,27 @@ ConnectionPool::~ConnectionPool() {
 }
 
 std::shared_ptr<pqxx::connection> ConnectionPool::acquire() {
-    std::unique_lock<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     
     if (!available_.empty()) {
         auto conn = available_.front();
         available_.pop();
-        return conn;
+        if (conn && conn->is_open()) {
+            return conn;
+        }
     }
     
     if (currentSize_ < poolSize_ && !closed_) {
         currentSize_++;
-        lock.unlock();
-        return std::make_shared<pqxx::connection>(connStr_);
+        try {
+            return std::make_shared<pqxx::connection>(connStr_);
+        } catch (...) {
+            currentSize_--;
+            return nullptr;
+        }
     }
     
-    cv_.wait(lock, [this] { return !available_.empty() || closed_; });
-    if (closed_) return nullptr;
-    auto conn = available_.front();
-    available_.pop();
-    return conn;
+    return nullptr;
 }
 
 void ConnectionPool::release(std::shared_ptr<pqxx::connection> conn) {
@@ -39,7 +46,6 @@ void ConnectionPool::release(std::shared_ptr<pqxx::connection> conn) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!closed_) {
         available_.push(conn);
-        cv_.notify_one();
     }
 }
 
@@ -47,5 +53,4 @@ void ConnectionPool::close() {
     std::lock_guard<std::mutex> lock(mutex_);
     closed_ = true;
     while (!available_.empty()) available_.pop();
-    cv_.notify_all();
 }

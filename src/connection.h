@@ -13,6 +13,7 @@ public:
 
 private:
     Napi::Value Query(const Napi::CallbackInfo& info);
+    Napi::Value QuerySync(const Napi::CallbackInfo& info);
     Napi::Value Prepare(const Napi::CallbackInfo& info);
     Napi::Value Execute(const Napi::CallbackInfo& info);
     Napi::Value Pipeline(const Napi::CallbackInfo& info);
