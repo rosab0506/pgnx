@@ -1,0 +1,8 @@
+driver
+*.o
+*.out
+node_modules/
+build/
+*.node
+
+test

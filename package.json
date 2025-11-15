@@ -1,0 +1,17 @@
+{
+  "name": "pgn-driver",
+  "version": "1.0.0",
+  "description": "High-performance PostgreSQL driver using libpqxx and N-API",
+  "main": "index.js",
+  "scripts": {
+    "install": "node-gyp rebuild",
+    "test": "node test.js"
+  },
+  "gypfile": true,
+  "dependencies": {
+    "node-addon-api": "^7.0.0"
+  },
+  "devDependencies": {
+    "node-gyp": "^10.0.0"
+  }
+}
