@@ -1,4 +1,37 @@
 #include "connection.h"
+#include <thread>
+
+inline Napi::Value FastConvert(Napi::Env env, const pqxx::field& field, int type) {
+    if (field.is_null()) return env.Null();
+    
+    if (type == 23 || type == 20 || type == 21) {
+        return Napi::Number::New(env, field.as<long long>());
+    } else if (type == 16) {
+        return Napi::Boolean::New(env, field.as<bool>());
+    } else if (type == 700 || type == 701) {
+        return Napi::Number::New(env, field.as<double>());
+    }
+    return Napi::String::New(env, field.c_str(), field.size());
+}
+
+inline Napi::Array ConvertResult(Napi::Env env, const pqxx::result& result) {
+    size_t rowCount = result.size();
+    auto rows = Napi::Array::New(env, rowCount);
+    
+    if (rowCount == 0) return rows;
+    
+    size_t colCount = result.columns();
+    
+    for (size_t i = 0; i < rowCount; ++i) {
+        auto row = Napi::Object::New(env);
+        
+        for (size_t j = 0; j < colCount; ++j) {
+            row.Set(result.column_name(j), FastConvert(env, result[i][j], result.column_type(j)));
+        }
+        rows[i] = row;
+    }
+    return rows;
+}
 
 struct QueryWorker : Napi::AsyncWorker {
     std::shared_ptr<ConnectionPool> pool;
@@ -20,52 +53,7 @@ struct QueryWorker : Napi::AsyncWorker {
     
     void OnOK() override {
         pool->release(conn);
-        
-        auto env = Env();
-        size_t rowCount = result.size();
-        
-        if (rowCount == 0) {
-            deferred.Resolve(Napi::Array::New(env, 0));
-            return;
-        }
-        
-        size_t colCount = result.columns();
-        auto rows = Napi::Array::New(env, rowCount);
-        
-        // Cache column metadata
-        std::vector<const char*> colNames(colCount);
-        std::vector<int> colTypes(colCount);
-        for (size_t j = 0; j < colCount; ++j) {
-            colNames[j] = result.column_name(j);
-            colTypes[j] = result.column_type(j);
-        }
-        
-        // Process rows
-        for (size_t i = 0; i < rowCount; ++i) {
-            auto row = Napi::Object::New(env);
-            const auto& dbRow = result[i];
-            
-            for (size_t j = 0; j < colCount; ++j) {
-                const auto& field = dbRow[j];
-                
-                if (field.is_null()) {
-                    row.Set(colNames[j], env.Null());
-                } else {
-                    int type = colTypes[j];
-                    if (type == 23 || type == 20 || type == 21) {
-                        row.Set(colNames[j], Napi::Number::New(env, field.as<long long>()));
-                    } else if (type == 16) {
-                        row.Set(colNames[j], Napi::Boolean::New(env, field.as<bool>()));
-                    } else if (type == 700 || type == 701) {
-                        row.Set(colNames[j], Napi::Number::New(env, field.as<double>()));
-                    } else {
-                        row.Set(colNames[j], Napi::String::New(env, field.c_str(), field.size()));
-                    }
-                }
-            }
-            rows[i] = row;
-        }
-        deferred.Resolve(rows);
+        deferred.Resolve(ConvertResult(Env(), result));
     }
     
     void OnError(const Napi::Error& e) override {
@@ -115,9 +103,13 @@ struct PipelineWorker : Napi::AsyncWorker {
 Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
     auto func = DefineClass(env, "Connection", {
         InstanceMethod("query", &Connection::Query),
+        InstanceMethod("querySync", &Connection::QuerySync),
         InstanceMethod("prepare", &Connection::Prepare),
         InstanceMethod("execute", &Connection::Execute),
         InstanceMethod("pipeline", &Connection::Pipeline),
+        InstanceMethod("begin", &Connection::Begin),
+        InstanceMethod("commit", &Connection::Commit),
+        InstanceMethod("rollback", &Connection::Rollback),
         InstanceMethod("listen", &Connection::Listen),
         InstanceMethod("unlisten", &Connection::Unlisten),
         InstanceMethod("close", &Connection::Close)
@@ -138,6 +130,47 @@ Connection::Connection(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Connec
 Connection::~Connection() {
     for (auto& [_, listener] : listeners_) listener->stop();
     pool_->close();
+}
+
+Napi::Value Connection::QuerySync(const Napi::CallbackInfo& info) {
+    auto env = info.Env();
+    
+    try {
+        auto conn = pool_->acquire();
+        if (!conn) {
+            Napi::Error::New(env, "Failed to acquire connection").ThrowAsJavaScriptException();
+            return env.Undefined();
+        }
+        
+        std::vector<std::string> params;
+        if (info.Length() > 1 && info[1].IsArray()) {
+            auto arr = info[1].As<Napi::Array>();
+            uint32_t len = arr.Length();
+            params.reserve(len);
+            for (uint32_t i = 0; i < len; ++i) {
+                auto val = arr.Get(i);
+                if (val.IsString()) {
+                    params.emplace_back(val.As<Napi::String>().Utf8Value());
+                } else if (val.IsNumber()) {
+                    params.emplace_back(std::to_string(val.As<Napi::Number>().Int64Value()));
+                } else if (val.IsBoolean()) {
+                    params.emplace_back(val.As<Napi::Boolean>().Value() ? "true" : "false");
+                }
+            }
+        }
+        
+        pqxx::nontransaction txn(*conn);
+        auto result = params.empty() ? 
+            txn.exec(info[0].As<Napi::String>().Utf8Value()) : 
+            txn.exec_params(info[0].As<Napi::String>().Utf8Value(), pqxx::prepare::make_dynamic_params(params));
+        
+        pool_->release(conn);
+        return ConvertResult(env, result);
+        
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 }
 
 Napi::Value Connection::Query(const Napi::CallbackInfo& info) {
@@ -214,6 +247,30 @@ Napi::Value Connection::Pipeline(const Napi::CallbackInfo& info) {
     }
     
     auto* worker = new PipelineWorker(env, pool_, std::move(queryList), deferred);
+    worker->Queue();
+    return deferred.Promise();
+}
+
+Napi::Value Connection::Begin(const Napi::CallbackInfo& info) {
+    auto env = info.Env();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto* worker = new QueryWorker(env, pool_, "BEGIN", {}, deferred);
+    worker->Queue();
+    return deferred.Promise();
+}
+
+Napi::Value Connection::Commit(const Napi::CallbackInfo& info) {
+    auto env = info.Env();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto* worker = new QueryWorker(env, pool_, "COMMIT", {}, deferred);
+    worker->Queue();
+    return deferred.Promise();
+}
+
+Napi::Value Connection::Rollback(const Napi::CallbackInfo& info) {
+    auto env = info.Env();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto* worker = new QueryWorker(env, pool_, "ROLLBACK", {}, deferred);
     worker->Queue();
     return deferred.Promise();
 }

@@ -17,6 +17,9 @@ private:
     Napi::Value Prepare(const Napi::CallbackInfo& info);
     Napi::Value Execute(const Napi::CallbackInfo& info);
     Napi::Value Pipeline(const Napi::CallbackInfo& info);
+    Napi::Value Begin(const Napi::CallbackInfo& info);
+    Napi::Value Commit(const Napi::CallbackInfo& info);
+    Napi::Value Rollback(const Napi::CallbackInfo& info);
     Napi::Value Listen(const Napi::CallbackInfo& info);
     Napi::Value Unlisten(const Napi::CallbackInfo& info);
     Napi::Value Close(const Napi::CallbackInfo& info);

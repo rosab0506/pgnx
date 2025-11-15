@@ -3,15 +3,20 @@
   "version": "1.0.0",
   "description": "High-performance PostgreSQL driver using libpqxx and N-API",
   "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
     "install": "node-gyp rebuild",
     "test": "node test.js"
   },
   "gypfile": true,
   "dependencies": {
-    "node-addon-api": "^7.0.0"
+    "node-addon-api": "^8.5.0"
   },
   "devDependencies": {
-    "node-gyp": "^10.0.0"
-  }
+    "node-gyp": "^12.0.0",
+    "@types/node": "^24.10.0"
+  },
+  "keywords": ["postgresql", "postgres", "database", "driver", "libpqxx", "native", "performance"],
+  "author": "",
+  "license": "MIT"
 }

@@ -1,8 +1,7 @@
 #pragma once
 #include <pqxx/pqxx>
-#include <queue>
+#include <vector>
 #include <mutex>
-#include <condition_variable>
 #include <memory>
 #include <string>
 
@@ -18,8 +17,7 @@ private:
     std::string connStr_;
     size_t poolSize_;
     size_t currentSize_;
-    std::queue<std::shared_ptr<pqxx::connection>> available_;
+    std::vector<std::shared_ptr<pqxx::connection>> available_;
     std::mutex mutex_;
-    std::condition_variable cv_;
     bool closed_ = false;
 };
