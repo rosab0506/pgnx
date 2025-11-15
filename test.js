@@ -1,15 +1,18 @@
 const { Connection } = require('./index');
 
-const connStr = 'postgresql://jack:secret123@localhost:5432/mydb';
+const connStr = 'postgresql://neondb_owner:npg_m7N0XzUxPnMu@ep-spring-hat-a8qw0bvp-pooler.eastus2.azure.neon.tech/neondb?sslmode=require&channel_binding=require'
 
 async function test() {
     console.log('🔗 Connecting to Neon PostgreSQL...\n');
-    
-    const startConn = Date.now();
     const conn = new Connection(connStr);
-    const connTime = Date.now() - startConn;
     
-    console.log(`✅ Connection created: ${connTime}ms\n`);
+    // First query triggers actual connection
+    console.log('📊 First Query (creates actual connection)...');
+    const startFirst = Date.now();
+    await conn.query('SELECT 1');
+    const firstTime = Date.now() - startFirst;
+    
+    console.log(`✅ First query completed: ${firstTime}ms (includes connection creation)\n`);
     
     try {
         // Test 1: Query users table
@@ -63,7 +66,7 @@ async function test() {
         console.log('═══════════════════════════════════════');
         console.log('📈 PERFORMANCE SUMMARY');
         console.log('═══════════════════════════════════════');
-        console.log(`Connection Time:        ${connTime}ms`);
+        console.log(`Connection Time:        ${firstTime}ms (actual)`);
         console.log(`Query Time (SELECT):    ${queryTime}ms`);
         console.log(`Count Time:             ${countTime}ms`);
         console.log(`Prepared Statement:     ${prepTime}ms`);

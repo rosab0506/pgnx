@@ -14,11 +14,8 @@ struct QueryWorker : Napi::AsyncWorker {
     void Execute() override {
         conn = pool->acquire();
         if (!conn) return;
-        
-        try {
-            pqxx::nontransaction txn(*conn);
-            result = params.empty() ? txn.exec(sql) : txn.exec_params(sql, pqxx::prepare::make_dynamic_params(params));
-        } catch (...) {}
+        pqxx::nontransaction txn(*conn);
+        result = params.empty() ? txn.exec(sql) : txn.exec_params(sql, pqxx::prepare::make_dynamic_params(params));
     }
     
     void OnOK() override {
@@ -26,33 +23,47 @@ struct QueryWorker : Napi::AsyncWorker {
         
         auto env = Env();
         size_t rowCount = result.size();
+        
+        if (rowCount == 0) {
+            deferred.Resolve(Napi::Array::New(env, 0));
+            return;
+        }
+        
+        size_t colCount = result.columns();
         auto rows = Napi::Array::New(env, rowCount);
         
-        if (rowCount > 0) {
-            size_t colCount = result.columns();
-            for (size_t i = 0; i < rowCount; ++i) {
-                auto row = Napi::Object::New(env);
-                for (size_t j = 0; j < colCount; ++j) {
-                    const auto& field = result[i][j];
-                    const char* name = result.column_name(j);
-                    
-                    if (!field.is_null()) {
-                        int type = result.column_type(j);
-                        if (type == 23 || type == 20 || type == 21) {
-                            row.Set(name, Napi::Number::New(env, field.as<long long>()));
-                        } else if (type == 16) {
-                            row.Set(name, Napi::Boolean::New(env, field.as<bool>()));
-                        } else if (type == 700 || type == 701) {
-                            row.Set(name, Napi::Number::New(env, field.as<double>()));
-                        } else {
-                            row.Set(name, Napi::String::New(env, field.c_str(), field.size()));
-                        }
+        // Cache column metadata
+        std::vector<const char*> colNames(colCount);
+        std::vector<int> colTypes(colCount);
+        for (size_t j = 0; j < colCount; ++j) {
+            colNames[j] = result.column_name(j);
+            colTypes[j] = result.column_type(j);
+        }
+        
+        // Process rows
+        for (size_t i = 0; i < rowCount; ++i) {
+            auto row = Napi::Object::New(env);
+            const auto& dbRow = result[i];
+            
+            for (size_t j = 0; j < colCount; ++j) {
+                const auto& field = dbRow[j];
+                
+                if (field.is_null()) {
+                    row.Set(colNames[j], env.Null());
+                } else {
+                    int type = colTypes[j];
+                    if (type == 23 || type == 20 || type == 21) {
+                        row.Set(colNames[j], Napi::Number::New(env, field.as<long long>()));
+                    } else if (type == 16) {
+                        row.Set(colNames[j], Napi::Boolean::New(env, field.as<bool>()));
+                    } else if (type == 700 || type == 701) {
+                        row.Set(colNames[j], Napi::Number::New(env, field.as<double>()));
                     } else {
-                        row.Set(name, env.Null());
+                        row.Set(colNames[j], Napi::String::New(env, field.c_str(), field.size()));
                     }
                 }
-                rows[i] = row;
             }
+            rows[i] = row;
         }
         deferred.Resolve(rows);
     }
@@ -77,14 +88,11 @@ struct PipelineWorker : Napi::AsyncWorker {
         conn = pool->acquire();
         if (!conn) return;
         
-        try {
-            pqxx::nontransaction txn(*conn);
-            affected.reserve(queries.size());
-            for (const auto& sql : queries) {
-                auto res = txn.exec(sql);
-                affected.push_back(res.affected_rows());
-            }
-        } catch (...) {}
+        pqxx::nontransaction txn(*conn);
+        affected.reserve(queries.size());
+        for (const auto& sql : queries) {
+            affected.push_back(txn.exec(sql).affected_rows());
+        }
     }
     
     void OnOK() override {
@@ -159,9 +167,7 @@ Napi::Value Connection::Query(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Connection::Prepare(const Napi::CallbackInfo& info) {
-    std::string name = info[0].As<Napi::String>().Utf8Value();
-    std::string sql = info[1].As<Napi::String>().Utf8Value();
-    prepared_[std::move(name)] = std::move(sql);
+    prepared_[info[0].As<Napi::String>().Utf8Value()] = info[1].As<Napi::String>().Utf8Value();
     return info.Env().Undefined();
 }
 
