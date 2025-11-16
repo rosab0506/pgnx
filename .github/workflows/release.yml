@@ -24,8 +24,8 @@ jobs:
         sudo apt-get install -y libpqxx-dev postgresql-server-dev-16 build-essential
         npm install
     
-    - name: Build for Node 20
-      run: npm run prebuild -- --runtime node --target 20
+    - name: Build prebuild
+      run: npm run prebuild
     
     - name: Upload binaries
       uses: actions/upload-artifact@v4
@@ -47,8 +47,8 @@ jobs:
         brew install libpqxx postgresql
         npm install
     
-    - name: Build for Node 20
-      run: npm run prebuild -- --runtime node --target 20
+    - name: Build prebuild
+      run: npm run prebuild
     
     - name: Upload binaries
       uses: actions/upload-artifact@v4
@@ -76,8 +76,8 @@ jobs:
     - name: Install npm dependencies
       run: npm install
     
-    - name: Build for Node 20
-      run: npm run prebuild -- --runtime node --target 20
+    - name: Build prebuild
+      run: npm run prebuild
     
     - name: Upload binaries
       uses: actions/upload-artifact@v4
@@ -112,6 +112,7 @@ jobs:
         draft: false
         prerelease: false
         generate_release_notes: true
+        body_path: RELEASE_NOTES.md
         files: |
           prebuilds-linux.zip
           prebuilds-macos.zip
