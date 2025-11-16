@@ -12,12 +12,11 @@
     "conditions": [
       ["OS=='win'", {
         "include_dirs": [
-          "C:/Program Files/PostgreSQL/16/include",
           "C:/vcpkg/installed/x64-windows/include"
         ],
         "libraries": [
-          "-lC:/Program Files/PostgreSQL/16/lib/libpq.lib",
-          "-lC:/vcpkg/installed/x64-windows/lib/pqxx.lib"
+          "-lC:/vcpkg/installed/x64-windows/lib/pqxx.lib",
+          "-lC:/vcpkg/installed/x64-windows/lib/libpq.lib"
         ],
         "msvs_settings": {
           "VCCLCompilerTool": {
@@ -37,15 +36,19 @@
       }],
       ["OS=='mac'", {
         "include_dirs": [
-          "/usr/local/include",
           "/opt/homebrew/include",
+          "/opt/homebrew/opt/libpqxx/include",
+          "/opt/homebrew/opt/postgresql@14/include",
+          "/usr/local/include",
           "/usr/local/opt/libpqxx/include",
           "/usr/local/opt/postgresql/include"
         ],
         "libraries": ["-lpqxx", "-lpq"],
         "library_dirs": [
-          "/usr/local/lib",
           "/opt/homebrew/lib",
+          "/opt/homebrew/opt/libpqxx/lib",
+          "/opt/homebrew/opt/postgresql@14/lib",
+          "/usr/local/lib",
           "/usr/local/opt/libpqxx/lib",
           "/usr/local/opt/postgresql/lib"
         ],
