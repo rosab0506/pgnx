@@ -1,0 +1,48 @@
+name: NPM Publish
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_branch }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        registry-url: 'https://registry.npmjs.org/'
+    
+    - name: Get version from tag
+      id: version
+      run: |
+        TAG=$(git describe --tags --abbrev=0)
+        VERSION=${TAG#v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Update package.json version
+      run: |
+        npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpqxx-dev postgresql-server-dev-all build-essential
+        npm install
+    
+    - name: Build
+      run: npm run prepublishOnly
+    
+    - name: Publish to npm
+      run: npm publish --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: ["Prebuild"]
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.event.workflow_run.head_branch }}
+    
+    - name: Get tag name
+      id: tag
+      run: |
+        TAG=$(git describe --tags --abbrev=0)
+        echo "TAG_NAME=$TAG" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.tag.outputs.TAG_NAME }}
+        name: Release ${{ steps.tag.outputs.TAG_NAME }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        body_path: RELEASE_NOTES.md

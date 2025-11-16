@@ -1,0 +1,88 @@
+name: Prebuild
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22, 25]
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node }}
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpqxx-dev postgresql-server-dev-all build-essential
+        npm install
+    
+    - name: Build prebuilds
+      run: npm run prebuild
+    
+    - name: Upload prebuilds
+      run: npm run upload
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22, 25]
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node }}
+    
+    - name: Install dependencies
+      run: |
+        brew install libpqxx postgresql
+        npm install
+    
+    - name: Build prebuilds
+      run: npm run prebuild
+    
+    - name: Upload prebuilds
+      run: npm run upload
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22, 25]
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node }}
+    
+    - name: Install dependencies
+      run: |
+        choco install postgresql16 --params '/Password:postgres'
+        git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+        cd C:\vcpkg
+        .\bootstrap-vcpkg.bat
+        .\vcpkg install libpqxx:x64-windows
+        .\vcpkg integrate install
+        npm install
+    
+    - name: Build prebuilds
+      run: npm run prebuild
+    
+    - name: Upload prebuilds
+      run: npm run upload
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

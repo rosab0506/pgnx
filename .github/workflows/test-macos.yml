@@ -1,0 +1,43 @@
+name: Test macOS
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-macos:
+    runs-on: macos-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x, 25.x]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+    
+    - name: Install dependencies
+      run: brew install libpqxx postgresql
+    
+    - name: Start PostgreSQL
+      run: |
+        brew services start postgresql
+        sleep 3
+        createdb testdb
+    
+    - name: Install npm dependencies
+      run: npm install
+    
+    - name: Build
+      run: npm run install
+    
+    - name: Run tests
+      run: npm test
+      env:
+        DATABASE_URL: postgresql://localhost:5432/testdb
