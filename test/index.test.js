@@ -3,7 +3,7 @@ const { Connection } = require('../index');
 const connStr = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/testdb';
 
 async function runTests() {
-    console.log('🧪 Running PGN Tests...\n');
+    console.log('🧪 Running PGNX Tests...\n');
     
     const conn = new Connection(connStr, 5);
     

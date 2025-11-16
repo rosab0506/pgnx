@@ -1,5 +1,5 @@
 {
-  "name": "pgn",
+  "name": "pgnx",
   "version": "1.0.0",
   "description": "High-performance PostgreSQL driver for Node.js using libpqxx and N-API",
   "main": "index.js",
@@ -12,12 +12,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Lumos-Labs-HQ/pgN.git"
+    "url": "https://github.com/Lumos-Labs-HQ/pgnx.git"
   },
   "keywords": [
     "postgresql",
     "postgres",
     "pg",
+    "pgnx",
     "database",
     "driver",
     "libpqxx",
@@ -31,9 +32,9 @@
   "author": "Lumos-Labs-HQ",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/Lumos-Labs-HQ/pgN/issues"
+    "url": "https://github.com/Lumos-Labs-HQ/pgnx/issues"
   },
-  "homepage": "https://github.com/Lumos-Labs-HQ/pgN#readme",
+  "homepage": "https://github.com/Lumos-Labs-HQ/pgnx#readme",
   "engines": {
     "node": ">=18.0.0"
   },

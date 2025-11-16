@@ -1,6 +1,6 @@
 {
   "targets": [{
-    "target_name": "pgn",
+    "target_name": "pgnx",
     "sources": ["src/addon.cpp", "src/connection_pool.cpp", "src/connection.cpp", "src/listener.cpp"],
     "include_dirs": [
       "<!@(node -p \"require('node-addon-api').include\")"

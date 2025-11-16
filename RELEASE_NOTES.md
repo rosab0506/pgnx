@@ -1,9 +1,9 @@
-# PGN - High-Performance PostgreSQL Driver
+# PGNX - High-Performance PostgreSQL Driver
 
 ## Installation
 
 ```bash
-npm install pgn
+npm install pgnx
 ```
 
 No additional dependencies needed!
@@ -23,11 +23,11 @@ No additional dependencies needed!
 ## Quick Start
 
 ```javascript
-const { Connection } = require('pgn');
+const { Connection } = require('pgnx');
 
 const conn = new Connection('postgresql://user:pass@localhost/db');
 const users = await conn.query('SELECT * FROM users');
 conn.close();
 ```
 
-See [README](https://github.com/Lumos-Labs-HQ/pgN#readme) for full documentation.
+See [README](https://github.com/Lumos-Labs-HQ/pgnx#readme) for full documentation.

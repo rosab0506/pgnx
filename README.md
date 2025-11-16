@@ -1,6 +1,6 @@
-# PGN - High-Performance PostgreSQL Driver
+# PGNX - High-Performance PostgreSQL Driver
 
-[![npm version](https://img.shields.io/npm/v/pgn.svg)](https://www.npmjs.com/package/pgn)
+[![npm version](https://img.shields.io/npm/v/pgnx.svg)](https://www.npmjs.com/package/pgnx)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 High-performance PostgreSQL driver for Node.js using libpqxx and N-API. Drop-in replacement for `pg` with 2-5x better performance.
@@ -21,7 +21,7 @@ High-performance PostgreSQL driver for Node.js using libpqxx and N-API. Drop-in 
 ## Installation
 
 ```bash
-npm install pgn
+npm install pgnx
 ```
 
 That's it! No additional dependencies needed. Prebuilt binaries are included for all platforms.
@@ -29,7 +29,7 @@ That's it! No additional dependencies needed. Prebuilt binaries are included for
 ## Quick Start
 
 ```javascript
-const { Connection } = require('pgn');
+const { Connection } = require('pgnx');
 
 // Create connection
 const conn = new Connection('postgresql://user:pass@localhost/db', 10);
@@ -85,7 +85,7 @@ Close all connections.
 ## TypeScript
 
 ```typescript
-import { Connection } from 'pgn';
+import { Connection } from 'pgnx';
 
 interface User {
   id: number;
@@ -98,8 +98,8 @@ const users = await conn.query<User>('SELECT * FROM users');
 
 ## Performance
 
-| Operation | pg | pgn | Improvement |
-|-----------|-----|-----|-------------|
+| Operation | pg | pgnx | Improvement |
+|-----------|-----|------|-------------|
 | Simple Query | 15ms | 6ms | 2.5x |
 | Prepared Statement | 12ms | 5ms | 2.4x |
 | Pipeline (3 queries) | 45ms | 18ms | 2.5x |
@@ -118,7 +118,7 @@ await client.end();
 
 **After:**
 ```javascript
-const { Connection } = require('pgn');
+const { Connection } = require('pgnx');
 const conn = new Connection('postgresql://localhost/db');
 const users = await conn.query('SELECT * FROM users');
 console.log(users);
@@ -138,6 +138,6 @@ Apache License 2.0
 
 ## Links
 
-- [GitHub](https://github.com/Lumos-Labs-HQ/pgN)
-- [npm](https://www.npmjs.com/package/pgn)
-- [Issues](https://github.com/Lumos-Labs-HQ/pgN/issues)
+- [GitHub](https://github.com/Lumos-Labs-HQ/pgnx)
+- [npm](https://www.npmjs.com/package/pgnx)
+- [Issues](https://github.com/Lumos-Labs-HQ/pgnx/issues)

@@ -1,3 +1,3 @@
-const { Connection } = require('./build/Release/pgn');
+const { Connection } = require('./build/Release/pgnx');
 
 module.exports = { Connection };

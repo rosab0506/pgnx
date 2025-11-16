@@ -12,6 +12,6 @@ try {
   console.error('Please install build dependencies:');
   console.error('Linux: sudo apt-get install -y libpqxx-dev postgresql-server-dev-all build-essential');
   console.error('macOS: brew install libpqxx postgresql');
-  console.error('Windows: See https://github.com/Lumos-Labs-HQ/pgN#readme\n');
+  console.error('Windows: See https://github.com/Lumos-Labs-HQ/pgnx#readme\n');
   process.exit(1);
 }
