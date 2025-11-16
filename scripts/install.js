@@ -16,39 +16,49 @@ const buildDir = path.join(__dirname, '..', 'build', 'Release');
 
 console.log(`🔍 Downloading prebuild: ${prebuildName}`);
 
-https.get(releaseUrl, (res) => {
-  if (res.statusCode === 200) {
-    console.log('✅ Found, downloading...');
+function download(url) {
+  https.get(url, (res) => {
+    if (res.statusCode === 302 || res.statusCode === 301) {
+      download(res.headers.location);
+      return;
+    }
     
-    const tarPath = path.join(__dirname, '..', prebuildName);
-    const file = fs.createWriteStream(tarPath);
-    
-    res.pipe(file);
-    
-    file.on('finish', () => {
-      file.close();
-      console.log('📦 Extracting...');
+    if (res.statusCode === 200) {
+      console.log('✅ Found, downloading...');
       
-      fs.mkdirSync(buildDir, { recursive: true });
+      const tarPath = path.join(__dirname, '..', prebuildName);
+      const file = fs.createWriteStream(tarPath);
       
-      tar.extract({
-        file: tarPath,
-        cwd: buildDir,
-        sync: true
+      res.pipe(file);
+      
+      file.on('finish', () => {
+        file.close();
+        console.log('📦 Extracting...');
+        
+        fs.mkdirSync(buildDir, { recursive: true });
+        
+        tar.extract({
+          file: tarPath,
+          cwd: buildDir,
+          sync: true
+        });
+        
+        fs.unlinkSync(tarPath);
+        console.log('✅ Installation complete!\n');
+        process.exit(0);
       });
-      
-      fs.unlinkSync(tarPath);
-      console.log('✅ Installation complete!\n');
-    });
-  } else {
-    console.error(`\n❌ Prebuild not available for your system!`);
-    console.error(`Platform: ${platform}, Arch: ${arch}, Node: v${abi}`);
-    console.error(`\nPlease report this at: https://github.com/Lumos-Labs-HQ/pgnx/issues\n`);
+    } else {
+      console.error(`\n❌ Prebuild not available for your system!`);
+      console.error(`Platform: ${platform}, Arch: ${arch}, Node: v${abi}`);
+      console.error(`\nPlease report this at: https://github.com/Lumos-Labs-HQ/pgnx/issues\n`);
+      process.exit(1);
+    }
+  }).on('error', (err) => {
+    console.error('\n❌ Download failed:', err.message);
+    console.error('Please check your internet connection or report at:');
+    console.error('https://github.com/Lumos-Labs-HQ/pgnx/issues\n');
     process.exit(1);
-  }
-}).on('error', (err) => {
-  console.error('\n❌ Download failed:', err.message);
-  console.error('Please check your internet connection or report at:');
-  console.error('https://github.com/Lumos-Labs-HQ/pgnx/issues\n');
-  process.exit(1);
-});
+  });
+}
+
+download(releaseUrl);

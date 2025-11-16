@@ -1,4 +1,4 @@
-# PGNX - High-Performance PostgreSQL Driver
+<!-- # PGNX - High-Performance PostgreSQL Driver
 
 ## Installation
 
@@ -30,4 +30,4 @@ const users = await conn.query('SELECT * FROM users');
 conn.close();
 ```
 
-See [README](https://github.com/Lumos-Labs-HQ/pgnx#readme) for full documentation.
+See [README](https://github.com/Lumos-Labs-HQ/pgnx#readme) for full documentation. -->
