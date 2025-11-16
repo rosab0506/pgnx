@@ -21,7 +21,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libpqxx-dev postgresql-server-dev-16 build-essential
+        sudo apt-get install -y libpqxx-dev build-essential
         npm install
     
     - name: Build prebuild
@@ -44,7 +44,7 @@ jobs:
     
     - name: Install dependencies
       run: |
-        brew install libpqxx postgresql
+        brew install libpqxx postgresql@16
         npm install
     
     - name: Build prebuild
@@ -65,16 +65,30 @@ jobs:
       with:
         node-version: 20
     
-    - name: Install dependencies
+    - name: Cache vcpkg
+      uses: actions/cache@v3
+      with:
+        path: C:\vcpkg\installed
+        key: vcpkg-${{ runner.os }}-libpqxx-v2
+    
+    - name: Setup vcpkg
       run: |
-        git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+        if (-not (Test-Path C:\vcpkg\vcpkg.exe)) {
+          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+          cd C:\vcpkg
+          .\bootstrap-vcpkg.bat
+        }
+    
+    - name: Install libpqxx
+      run: |
         cd C:\vcpkg
-        .\bootstrap-vcpkg.bat
-        .\vcpkg install libpqxx:x64-windows libpq:x64-windows
+        .\vcpkg install libpqxx:x64-windows --clean-after-build
         .\vcpkg integrate install
     
     - name: Install npm dependencies
-      run: npm install
+      run: npm install --build-from-source
+      env:
+        npm_config_msvs_version: 2022
     
     - name: Build prebuild
       run: npm run prebuild
@@ -94,11 +108,13 @@ jobs:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
     
-    - name: Create zips
+    - name: Merge prebuilds
       run: |
-        zip -r prebuilds-linux.zip prebuilds-linux/
-        zip -r prebuilds-macos.zip prebuilds-macos/
-        zip -r prebuilds-windows.zip prebuilds-windows/
+        mkdir -p prebuilds
+        cp -r prebuilds-linux/* prebuilds/ 2>/dev/null || true
+        cp -r prebuilds-macos/* prebuilds/ 2>/dev/null || true
+        cp -r prebuilds-windows/* prebuilds/ 2>/dev/null || true
+        tar -czf prebuilds.tar.gz prebuilds/
     
     - name: Get tag name
       id: tag
@@ -113,7 +129,4 @@ jobs:
         prerelease: false
         generate_release_notes: true
         body_path: RELEASE_NOTES.md
-        files: |
-          prebuilds-linux.zip
-          prebuilds-macos.zip
-          prebuilds-windows.zip
+        files: prebuilds.tar.gz

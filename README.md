@@ -24,7 +24,7 @@ High-performance PostgreSQL driver for Node.js using libpqxx and N-API. Drop-in 
 npm install pgnx
 ```
 
-That's it! No additional dependencies needed. Prebuilt binaries are included for all platforms.
+That's it! Prebuilt binaries included for Linux, macOS, and Windows. No dependencies needed!
 
 ## Quick Start
 

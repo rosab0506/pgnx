@@ -15,8 +15,8 @@
           "C:/vcpkg/installed/x64-windows/include"
         ],
         "libraries": [
-          "-lC:/vcpkg/installed/x64-windows/lib/pqxx.lib",
-          "-lC:/vcpkg/installed/x64-windows/lib/libpq.lib"
+          "C:/vcpkg/installed/x64-windows/lib/pqxx.lib",
+          "C:/vcpkg/installed/x64-windows/lib/libpq.lib"
         ],
         "msvs_settings": {
           "VCCLCompilerTool": {
@@ -36,21 +36,15 @@
       }],
       ["OS=='mac'", {
         "include_dirs": [
-          "/opt/homebrew/include",
-          "/opt/homebrew/opt/libpqxx/include",
-          "/opt/homebrew/opt/postgresql@14/include",
-          "/usr/local/include",
-          "/usr/local/opt/libpqxx/include",
-          "/usr/local/opt/postgresql/include"
+          "<!@(brew --prefix)/include",
+          "<!@(brew --prefix libpqxx)/include",
+          "<!@(brew --prefix postgresql@16)/include"
         ],
         "libraries": ["-lpqxx", "-lpq"],
         "library_dirs": [
-          "/opt/homebrew/lib",
-          "/opt/homebrew/opt/libpqxx/lib",
-          "/opt/homebrew/opt/postgresql@14/lib",
-          "/usr/local/lib",
-          "/usr/local/opt/libpqxx/lib",
-          "/usr/local/opt/postgresql/lib"
+          "<!@(brew --prefix)/lib",
+          "<!@(brew --prefix libpqxx)/lib",
+          "<!@(brew --prefix postgresql@16)/lib"
         ],
         "xcode_settings": {
           "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
