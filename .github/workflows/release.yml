@@ -46,8 +46,8 @@ jobs:
         choco install postgresql
         vcpkg install libpqxx:x64-windows
     
-    - name: Install npm dependencies
-      run: npm install
+    - name: Install npm dependencies (skip install script)
+      run: npm install --ignore-scripts
     
     - name: Build
       run: npx node-gyp rebuild
