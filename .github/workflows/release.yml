@@ -38,18 +38,32 @@ jobs:
     
     - name: Install dependencies (macOS)
       if: matrix.os == 'macos-latest'
-      run: brew install libpqxx postgresql
+      run: |
+        brew install libpqxx postgresql@16
+        echo "LDFLAGS=-L$(brew --prefix postgresql@16)/lib -L$(brew --prefix libpqxx)/lib" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I$(brew --prefix postgresql@16)/include -I$(brew --prefix libpqxx)/include" >> $GITHUB_ENV
     
-    - name: Install dependencies (Windows)
+    - name: Setup vcpkg (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        choco install postgresql
-        vcpkg install libpqxx:x64-windows
+        git clone --depth 1 https://github.com/Microsoft/vcpkg.git C:\vcpkg
+        cd C:\vcpkg
+        .\bootstrap-vcpkg.bat
+        .\vcpkg install libpqxx:x64-windows --recurse
+      shell: pwsh
     
     - name: Install npm dependencies (skip install script)
       run: npm install --ignore-scripts
     
-    - name: Build
+    - name: Build (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        $env:VCPKG_ROOT = "C:\vcpkg"
+        npx node-gyp rebuild
+      shell: pwsh
+    
+    - name: Build (Unix)
+      if: matrix.os != 'windows-latest'
       run: npx node-gyp rebuild
     
     - name: Get version and ABI
