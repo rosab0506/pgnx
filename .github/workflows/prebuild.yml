@@ -8,66 +8,65 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [18, 20, 22, 25]
     steps:
     - uses: actions/checkout@v4
     
     - uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node }}
+        node-version: 18
     
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libpqxx-dev postgresql-server-dev-all build-essential
+        sudo apt-get install -y libpqxx-dev postgresql-server-dev-16 build-essential
         npm install
     
-    - name: Build prebuilds
-      run: npm run prebuild
+    - name: Build for multiple Node versions
+      run: |
+        for version in 18 20 22 25; do
+          npm run prebuild -- --runtime node --target $version
+        done
     
-    - name: Upload prebuilds
-      run: npm run upload
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload binaries
+      uses: actions/upload-artifact@v3
+      with:
+        name: prebuilds-linux
+        path: prebuilds/
 
   build-macos:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        node: [18, 20, 22, 25]
     steps:
     - uses: actions/checkout@v4
     
     - uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node }}
+        node-version: 18
     
     - name: Install dependencies
       run: |
         brew install libpqxx postgresql
         npm install
     
-    - name: Build prebuilds
-      run: npm run prebuild
+    - name: Build for multiple Node versions
+      run: |
+        for version in 18 20 22 25; do
+          npm run prebuild -- --runtime node --target $version
+        done
     
-    - name: Upload prebuilds
-      run: npm run upload
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload binaries
+      uses: actions/upload-artifact@v3
+      with:
+        name: prebuilds-macos
+        path: prebuilds/
 
   build-windows:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        node: [18, 20, 22, 25]
     steps:
     - uses: actions/checkout@v4
     
     - uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node }}
+        node-version: 18
     
     - name: Install dependencies
       run: |
@@ -79,10 +78,41 @@ jobs:
         .\vcpkg integrate install
         npm install
     
-    - name: Build prebuilds
-      run: npm run prebuild
+    - name: Build for multiple Node versions
+      run: |
+        npm run prebuild -- --runtime node --target 18
+        npm run prebuild -- --runtime node --target 20
+        npm run prebuild -- --runtime node --target 22
+        npm run prebuild -- --runtime node --target 25
     
-    - name: Upload prebuilds
-      run: npm run upload
+    - name: Upload binaries
+      uses: actions/upload-artifact@v3
+      with:
+        name: prebuilds-windows
+        path: prebuilds/
+
+  upload-release:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+    
+    - name: Get tag name
+      id: tag
+      run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    
+    - name: Create tarball
+      run: |
+        mkdir -p release
+        tar -czf release/prebuilds.tar.gz prebuilds-*
+    
+    - name: Upload to release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.tag.outputs.TAG_NAME }}
+        files: release/prebuilds.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

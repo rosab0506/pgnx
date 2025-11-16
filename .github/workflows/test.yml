@@ -35,7 +35,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libpqxx-dev postgresql-server-dev-all build-essential
+        sudo apt-get install -y libpqxx-dev postgresql-server-dev-16 build-essential
     
     - name: Install npm dependencies
       run: npm install

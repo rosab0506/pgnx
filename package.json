@@ -7,9 +7,8 @@
   "scripts": {
     "install": "prebuild-install || node scripts/install.js",
     "test": "node test/index.test.js",
-    "prebuild": "prebuild --all --strip",
-    "upload": "prebuild --upload-all",
-    "prepublishOnly": "npm run prebuild"
+    "prebuild": "prebuild --strip --verbose",
+    "prepublishOnly": "echo 'Prebuilds should be uploaded via CI'"
   },
   "repository": {
     "type": "git",
@@ -53,14 +52,10 @@
     "@types/node": "^24.10.0",
     "prebuild": "^13.0.1"
   },
-  "binary": {
-    "module_name": "pgn",
-    "module_path": "./build/Release/",
-    "host": "https://github.com/Lumos-Labs-HQ/pgN/releases/download/"
-  },
   "files": [
     "src/",
     "scripts/",
+    "prebuilds/",
     "index.js",
     "index.d.ts",
     "binding.gyp",
