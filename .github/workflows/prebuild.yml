@@ -28,7 +28,7 @@ jobs:
         done
     
     - name: Upload binaries
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: prebuilds-linux
         path: prebuilds/
@@ -54,7 +54,7 @@ jobs:
         done
     
     - name: Upload binaries
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: prebuilds-macos
         path: prebuilds/
@@ -86,7 +86,7 @@ jobs:
         npm run prebuild -- --runtime node --target 25
     
     - name: Upload binaries
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: prebuilds-windows
         path: prebuilds/
@@ -98,7 +98,7 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
     
     - name: Get tag name
       id: tag
