@@ -52,14 +52,18 @@ async function runTests() {
         await conn.query('DROP TABLE test_users');
         
         console.log('🎉 All tests passed!\n');
-        process.exit(0);
         
     } catch (error) {
         console.error('❌ Test failed:', error.message);
-        process.exit(1);
-    } finally {
         conn.close();
+        process.exit(1);
     }
+    
+    // Wait a bit before closing to ensure all async operations complete
+    setTimeout(() => {
+        conn.close();
+        process.exit(0);
+    }, 100);
 }
 
 runTests();
