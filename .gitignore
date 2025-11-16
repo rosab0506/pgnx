@@ -1,8 +1,6 @@
-driver
-*.o
-*.out
 node_modules/
 build/
-*.node
-
-tests
+*.log
+.DS_Store
+test.js
+tests/

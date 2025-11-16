@@ -1,22 +1,70 @@
 {
-  "name": "pgn-driver",
+  "name": "pgn",
   "version": "1.0.0",
-  "description": "High-performance PostgreSQL driver using libpqxx and N-API",
+  "description": "High-performance PostgreSQL driver for Node.js using libpqxx and N-API",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "install": "node-gyp rebuild",
-    "test": "node test.js"
+    "install": "prebuild-install || node scripts/install.js",
+    "test": "node test/index.test.js",
+    "prebuild": "prebuild --all --strip",
+    "upload": "prebuild --upload-all",
+    "prepublishOnly": "npm run prebuild"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lumos-Labs-HQ/pgN.git"
+  },
+  "keywords": [
+    "postgresql",
+    "postgres",
+    "pg",
+    "database",
+    "driver",
+    "libpqxx",
+    "native",
+    "performance",
+    "high-performance",
+    "connection-pool",
+    "async",
+    "napi"
+  ],
+  "author": "Lumos-Labs-HQ",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/Lumos-Labs-HQ/pgN/issues"
+  },
+  "homepage": "https://github.com/Lumos-Labs-HQ/pgN#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
   "gypfile": true,
   "dependencies": {
-    "node-addon-api": "^8.5.0"
+    "node-addon-api": "^8.5.0",
+    "prebuild-install": "^7.1.2"
   },
   "devDependencies": {
     "node-gyp": "^12.0.0",
-    "@types/node": "^24.10.0"
+    "@types/node": "^24.10.0",
+    "prebuild": "^13.0.1"
   },
-  "keywords": ["postgresql", "postgres", "database", "driver", "libpqxx", "native", "performance"],
-  "author": "",
-  "license": "MIT"
+  "binary": {
+    "module_name": "pgn",
+    "module_path": "./build/Release/",
+    "host": "https://github.com/Lumos-Labs-HQ/pgN/releases/download/"
+  },
+  "files": [
+    "src/",
+    "scripts/",
+    "index.js",
+    "index.d.ts",
+    "binding.gyp",
+    "README.md",
+    "LICENSE"
+  ]
 }

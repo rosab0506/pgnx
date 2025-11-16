@@ -1,0 +1,12 @@
+test.js
+tests/
+test/
+build/
+node_modules/
+.git/
+.github/
+*.log
+.DS_Store
+RELEASE_NOTES.md
+Makefile
+.gitignore
