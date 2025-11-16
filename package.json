@@ -1,14 +1,13 @@
 {
   "name": "pgnx",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "High-performance PostgreSQL driver for Node.js using libpqxx and N-API",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "install": "prebuild-install || node scripts/install.js",
+    "install": "node scripts/install.js",
     "test": "node test/index.test.js",
-    "prebuild": "prebuild --strip --verbose",
-    "prepublishOnly": "echo 'Prebuilds should be uploaded via CI'"
+    "prebuild": "node-gyp rebuild && tar -czf prebuilds/pgnx-v$npm_package_version-node-v$(node -p process.versions.modules)-$(node -p process.platform)-$(node -p process.arch).tar.gz -C build/Release pgnx.node"
   },
   "repository": {
     "type": "git",
@@ -45,8 +44,7 @@
   ],
   "gypfile": true,
   "dependencies": {
-    "node-addon-api": "^8.5.0",
-    "prebuild-install": "^7.1.2"
+    "node-addon-api": "^8.5.0"
   },
   "devDependencies": {
     "node-gyp": "^12.0.0",
@@ -54,12 +52,10 @@
     "prebuild": "^13.0.1"
   },
   "files": [
-    "scripts/install.js",
-    "prebuilds/",
+    "scripts/",
     "index.js",
     "index.d.ts",
     "README.md",
-    "LICENSE",
-    "binding.gyp"
+    "LICENSE"
   ]
 }

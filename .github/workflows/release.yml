@@ -5,129 +5,91 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
-
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+          - os: windows-latest
+            platform: win32
+            arch: x64
+    
+    runs-on: ${{ matrix.os }}
+    
     steps:
     - uses: actions/checkout@v4
     
-    - uses: actions/setup-node@v4
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: '20'
     
-    - name: Install dependencies
+    - name: Install dependencies (Linux)
+      if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libpqxx-dev build-essential
-        npm install
+        sudo apt-get install -y libpqxx-dev postgresql-server-dev-16 build-essential
     
-    - name: Build prebuild
-      run: npm run prebuild
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: brew install libpqxx postgresql
     
-    - name: Upload binaries
-      uses: actions/upload-artifact@v4
-      with:
-        name: prebuilds-linux
-        path: prebuilds/
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 20
-    
-    - name: Install dependencies
+    - name: Install dependencies (Windows)
+      if: matrix.os == 'windows-latest'
       run: |
-        brew install libpqxx postgresql@16
-        npm install
-    
-    - name: Build prebuild
-      run: npm run prebuild
-    
-    - name: Upload binaries
-      uses: actions/upload-artifact@v4
-      with:
-        name: prebuilds-macos
-        path: prebuilds/
-
-  build-windows:
-    runs-on: windows-latest
-    timeout-minutes: 60
-    steps:
-    - uses: actions/checkout@v4
-    
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 20
-    
-    - name: Cache vcpkg
-      uses: actions/cache@v3
-      with:
-        path: C:\vcpkg\installed
-        key: vcpkg-${{ runner.os }}-libpqxx-v2
-    
-    - name: Setup vcpkg
-      run: |
-        if (-not (Test-Path C:\vcpkg\vcpkg.exe)) {
-          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
-          cd C:\vcpkg
-          .\bootstrap-vcpkg.bat
-        }
-    
-    - name: Install libpqxx
-      run: |
-        cd C:\vcpkg
-        .\vcpkg install libpqxx:x64-windows --clean-after-build
-        .\vcpkg integrate install
+        choco install postgresql
+        vcpkg install libpqxx:x64-windows
     
     - name: Install npm dependencies
-      run: npm install --build-from-source
-      env:
-        npm_config_msvs_version: 2022
+      run: npm install
     
-    - name: Build prebuild
-      run: npm run prebuild
+    - name: Build
+      run: npx node-gyp rebuild
     
-    - name: Upload binaries
+    - name: Get version and ABI
+      id: version
+      shell: bash
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        ABI=$(node -p "process.versions.modules")
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "ABI=$ABI" >> $GITHUB_OUTPUT
+    
+    - name: Create prebuild
+      shell: bash
+      run: |
+        mkdir -p prebuilds
+        cd build/Release
+        tar -czf ../../prebuilds/pgnx-v${{ steps.version.outputs.VERSION }}-node-v${{ steps.version.outputs.ABI }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz pgnx.node
+    
+    - name: Upload prebuild
       uses: actions/upload-artifact@v4
       with:
-        name: prebuilds-windows
-        path: prebuilds/
+        name: prebuild-${{ matrix.platform }}-${{ matrix.arch }}
+        path: prebuilds/*.tar.gz
 
   release:
-    needs: [build-linux, build-macos, build-windows]
+    needs: build
     runs-on: ubuntu-latest
+    
     steps:
     - uses: actions/checkout@v4
     
-    - name: Download all artifacts
+    - name: Download all prebuilds
       uses: actions/download-artifact@v4
-    
-    - name: Merge prebuilds
-      run: |
-        mkdir -p prebuilds
-        cp -r prebuilds-linux/* prebuilds/ 2>/dev/null || true
-        cp -r prebuilds-macos/* prebuilds/ 2>/dev/null || true
-        cp -r prebuilds-windows/* prebuilds/ 2>/dev/null || true
-        tar -czf prebuilds.tar.gz prebuilds/
-    
-    - name: Get tag name
-      id: tag
-      run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      with:
+        path: prebuilds
     
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ steps.tag.outputs.TAG_NAME }}
-        name: Release ${{ steps.tag.outputs.TAG_NAME }}
-        draft: false
-        prerelease: false
+        files: prebuilds/**/*.tar.gz
         generate_release_notes: true
-        body_path: RELEASE_NOTES.md
-        files: prebuilds.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
