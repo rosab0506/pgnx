@@ -1,30 +1,107 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["Prebuild"]
-    types:
-      - completed
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  build-linux:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    
     steps:
     - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
       with:
-        fetch-depth: 0
-        ref: ${{ github.event.workflow_run.head_branch }}
+        node-version: 20
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpqxx-dev postgresql-server-dev-16 build-essential
+        npm install
+    
+    - name: Build for Node 20
+      run: npm run prebuild -- --runtime node --target 20
+    
+    - name: Upload binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: prebuilds-linux
+        path: prebuilds/
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+    
+    - name: Install dependencies
+      run: |
+        brew install libpqxx postgresql
+        npm install
+    
+    - name: Build for Node 20
+      run: npm run prebuild -- --runtime node --target 20
+    
+    - name: Upload binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: prebuilds-macos
+        path: prebuilds/
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+    
+    - name: Install dependencies
+      run: |
+        choco install postgresql16 --params '/Password:postgres'
+        git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+        cd C:\vcpkg
+        .\bootstrap-vcpkg.bat
+        .\vcpkg install libpqxx:x64-windows
+        .\vcpkg integrate install
+        npm install
+    
+    - name: Build for Node 20
+      run: npm run prebuild -- --runtime node --target 20
+    
+    - name: Upload binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: prebuilds-windows
+        path: prebuilds/
+
+  release:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+    
+    - name: Create zips
+      run: |
+        zip -r prebuilds-linux.zip prebuilds-linux/
+        zip -r prebuilds-macos.zip prebuilds-macos/
+        zip -r prebuilds-windows.zip prebuilds-windows/
     
     - name: Get tag name
       id: tag
-      run: |
-        TAG=$(git describe --tags --abbrev=0)
-        echo "TAG_NAME=$TAG" >> $GITHUB_OUTPUT
+      run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
     
     - name: Create Release
       uses: softprops/action-gh-release@v1
@@ -34,4 +111,7 @@ jobs:
         draft: false
         prerelease: false
         generate_release_notes: true
-        body_path: RELEASE_NOTES.md
+        files: |
+          prebuilds-linux.zip
+          prebuilds-macos.zip
+          prebuilds-windows.zip
