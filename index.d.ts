@@ -18,6 +18,7 @@ export class Connection {
   listen(channel: string, callback: (payload: string) => void): void;
   unlisten(channel: string): void;
   close(): void;
+  poolStatus?(): { available: number; current: number; max: number; closed: boolean };
 }
 
 export interface PoolConfig {

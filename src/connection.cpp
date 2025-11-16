@@ -40,20 +40,33 @@ struct QueryWorker : Napi::AsyncWorker {
     pqxx::result result;
     Napi::Promise::Deferred deferred;
     std::shared_ptr<pqxx::connection> conn;
+    std::string errorMsg;
     
     QueryWorker(Napi::Env env, std::shared_ptr<ConnectionPool> p, std::string s, std::vector<std::string> prm, Napi::Promise::Deferred d)
         : AsyncWorker(env), pool(p), sql(std::move(s)), params(std::move(prm)), deferred(d) {}
     
     void Execute() override {
         conn = pool->acquire();
-        if (!conn) return;
-        pqxx::nontransaction txn(*conn);
-        result = params.empty() ? txn.exec(sql) : txn.exec_params(sql, pqxx::prepare::make_dynamic_params(params));
+        if (!conn) {
+            errorMsg = "Failed to acquire connection from pool";
+            return;
+        }
+        try {
+            pqxx::nontransaction txn(*conn);
+            result = params.empty() ? txn.exec(sql) : txn.exec_params(sql, pqxx::prepare::make_dynamic_params(params));
+        } catch (const std::exception& e) {
+            errorMsg = e.what();
+            throw;
+        }
     }
     
     void OnOK() override {
-        pool->release(conn);
-        deferred.Resolve(ConvertResult(Env(), result));
+        if (conn) pool->release(conn);
+        if (!errorMsg.empty()) {
+            deferred.Reject(Napi::Error::New(Env(), errorMsg).Value());
+        } else {
+            deferred.Resolve(ConvertResult(Env(), result));
+        }
     }
     
     void OnError(const Napi::Error& e) override {
@@ -68,23 +81,37 @@ struct PipelineWorker : Napi::AsyncWorker {
     std::vector<size_t> affected;
     Napi::Promise::Deferred deferred;
     std::shared_ptr<pqxx::connection> conn;
+    std::string errorMsg;
     
     PipelineWorker(Napi::Env env, std::shared_ptr<ConnectionPool> p, std::vector<std::string> q, Napi::Promise::Deferred d)
         : AsyncWorker(env), pool(p), queries(std::move(q)), deferred(d) {}
     
     void Execute() override {
         conn = pool->acquire();
-        if (!conn) return;
+        if (!conn) {
+            errorMsg = "Failed to acquire connection from pool";
+            return;
+        }
         
-        pqxx::nontransaction txn(*conn);
-        affected.reserve(queries.size());
-        for (const auto& sql : queries) {
-            affected.push_back(txn.exec(sql).affected_rows());
+        try {
+            pqxx::nontransaction txn(*conn);
+            affected.reserve(queries.size());
+            for (const auto& sql : queries) {
+                affected.push_back(txn.exec(sql).affected_rows());
+            }
+        } catch (const std::exception& e) {
+            errorMsg = e.what();
+            throw;
         }
     }
     
     void OnOK() override {
-        pool->release(conn);
+        if (conn) pool->release(conn);
+        
+        if (!errorMsg.empty()) {
+            deferred.Reject(Napi::Error::New(Env(), errorMsg).Value());
+            return;
+        }
         
         auto env = Env();
         auto results = Napi::Array::New(env, affected.size());
@@ -112,6 +139,7 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("rollback", &Connection::Rollback),
         InstanceMethod("listen", &Connection::Listen),
         InstanceMethod("unlisten", &Connection::Unlisten),
+        InstanceMethod("poolStatus", &Connection::PoolStatus),
         InstanceMethod("close", &Connection::Close)
     });
     auto* constructor = new Napi::FunctionReference();
@@ -281,6 +309,11 @@ Napi::Value Connection::Listen(const Napi::CallbackInfo& info) {
     auto callback = info[1].As<Napi::Function>();
     
     auto conn = pool_->acquire();
+    if (!conn) {
+        Napi::Error::New(env, "Failed to acquire connection for listener").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    
     std::string connStr = conn->connection_string();
     pool_->release(conn);
     
@@ -308,4 +341,14 @@ Napi::Value Connection::Close(const Napi::CallbackInfo& info) {
     listeners_.clear();
     pool_->close();
     return info.Env().Undefined();
+}
+
+Napi::Value Connection::PoolStatus(const Napi::CallbackInfo& info) {
+    auto env = info.Env();
+    Napi::Object stats = Napi::Object::New(env);
+    stats.Set("available", Napi::Number::New(env, pool_->availableCount()));
+    stats.Set("current", Napi::Number::New(env, pool_->currentCount()));
+    stats.Set("max", Napi::Number::New(env, pool_->maxSize()));
+    stats.Set("closed", Napi::Boolean::New(env, pool_->closed()));
+    return stats;
 }

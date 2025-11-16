@@ -23,6 +23,7 @@ private:
     Napi::Value Listen(const Napi::CallbackInfo& info);
     Napi::Value Unlisten(const Napi::CallbackInfo& info);
     Napi::Value Close(const Napi::CallbackInfo& info);
+    Napi::Value PoolStatus(const Napi::CallbackInfo& info);
 
     std::shared_ptr<ConnectionPool> pool_;
     std::unordered_map<std::string, std::unique_ptr<Listener>> listeners_;

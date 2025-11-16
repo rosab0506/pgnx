@@ -1,5 +1,4 @@
 #include "listener.h"
-#include <poll.h>
 
 Listener::Listener(const std::string& connStr, const std::string& channel, Napi::Function callback)
     : connStr_(connStr), channel_(channel) {
@@ -25,13 +24,14 @@ void Listener::listen() {
     try {
         pqxx::connection conn(connStr_);
         pqxx::work txn(conn);
-        txn.exec("LISTEN " + channel_);
+        txn.exec("LISTEN " + conn.quote_name(channel_));
         txn.commit();
 
         while (running_) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            int notifs = conn.get_notifs();
-            if (notifs > 0) {
+            conn.await_notification(100, 0);
+            
+            int count = conn.get_notifs();
+            if (count > 0) {
                 tsfn_.BlockingCall([](Napi::Env env, Napi::Function jsCallback) {
                     jsCallback.Call({Napi::String::New(env, "notification")});
                 });
