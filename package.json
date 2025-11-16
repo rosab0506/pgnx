@@ -54,13 +54,12 @@
     "prebuild": "^13.0.1"
   },
   "files": [
-    "src/",
-    "scripts/",
+    "scripts/install.js",
     "prebuilds/",
     "index.js",
     "index.d.ts",
-    "binding.gyp",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "binding.gyp"
   ]
 }
