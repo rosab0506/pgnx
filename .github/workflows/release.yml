@@ -158,7 +158,7 @@ jobs:
       if: matrix.os == 'windows-latest'
       shell: pwsh
       run: |
-        vcpkg install libpqxx:x64-windows-static postgresql:x64-windows-static openssl:x64-windows-static --recurse
+        vcpkg install libpqxx:x64-windows-static libpq:x64-windows-static openssl:x64-windows-static --recurse
         
         # Create binding.gyp for Windows
         @"
