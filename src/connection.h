@@ -26,6 +26,7 @@ private:
     Napi::Value PoolStatus(const Napi::CallbackInfo& info);
 
     std::shared_ptr<ConnectionPool> pool_;
+    std::string connStr_;
     std::unordered_map<std::string, std::unique_ptr<Listener>> listeners_;
     std::unordered_map<std::string, std::string> prepared_;
 };
