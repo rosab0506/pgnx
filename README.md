@@ -1,6 +1,8 @@
 # PGNX - High-Performance PostgreSQL Driver
 
 [![npm version](https://img.shields.io/npm/v/pgnx.svg)](https://www.npmjs.com/package/pgnx)
+
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 High-performance PostgreSQL driver for Node.js using libpqxx and N-API. Drop-in replacement for `pg` with 2-5x better performance.
