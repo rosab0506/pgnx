@@ -97,7 +97,7 @@ jobs:
         wget -q https://ftp.postgresql.org/pub/source/v16.1/postgresql-16.1.tar.gz
         tar xzf postgresql-16.1.tar.gz
         cd postgresql-16.1
-        CFLAGS="-fPIC -O3" ./configure --prefix=/tmp/pgsql --without-readline --with-openssl --with-includes=$(brew --prefix openssl@3)/include --with-libraries=$(brew --prefix openssl@3)/lib
+        CFLAGS="-fPIC -O3" ./configure --prefix=/tmp/pgsql --without-readline --without-icu --with-openssl --with-includes=$(brew --prefix openssl@3)/include --with-libraries=$(brew --prefix openssl@3)/lib
         make -C src/interfaces/libpq -j$(sysctl -n hw.ncpu)
         make -C src/interfaces/libpq install
         make -C src/bin/pg_config install
@@ -158,10 +158,8 @@ jobs:
       if: matrix.os == 'windows-latest'
       shell: pwsh
       run: |
-        git clone --depth 1 https://github.com/Microsoft/vcpkg.git C:\vcpkg
-        cd C:\vcpkg
-        .\bootstrap-vcpkg.bat
-        .\vcpkg install libpqxx:x64-windows-static openssl:x64-windows-static
+        # vcpkg is pre-installed on GitHub Actions Windows runners
+        vcpkg install libpqxx:x64-windows openssl:x64-windows --recurse
     
     - name: Install npm dependencies
       run: npm install --ignore-scripts
