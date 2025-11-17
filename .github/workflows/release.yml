@@ -174,11 +174,15 @@ jobs:
             "libraries": [
               "C:/vcpkg/installed/x64-windows-static/lib/pqxx.lib",
               "C:/vcpkg/installed/x64-windows-static/lib/libpq.lib",
+              "C:/vcpkg/installed/x64-windows-static/lib/libpgcommon.lib",
+              "C:/vcpkg/installed/x64-windows-static/lib/libpgport.lib",
               "C:/vcpkg/installed/x64-windows-static/lib/libssl.lib",
               "C:/vcpkg/installed/x64-windows-static/lib/libcrypto.lib",
               "ws2_32.lib",
               "secur32.lib",
-              "crypt32.lib"
+              "crypt32.lib",
+              "wldap32.lib",
+              "advapi32.lib"
             ],
             "msvs_settings": {
               "VCCLCompilerTool": {
