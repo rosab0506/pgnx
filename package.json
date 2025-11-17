@@ -1,5 +1,5 @@
 {
-  "name": "pgnx-corebylumos",
+  "name": "@superdev22/pgnx",
   "version": "2.2.7",
   "description": "High-performance PostgreSQL driver for Node.js using libpqxx and N-API",
   "main": "index.js",
