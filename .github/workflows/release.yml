@@ -20,9 +20,9 @@ jobs:
           - os: macos-13
             platform: darwin
             arch: x64
-          - os: windows-latest
-            platform: win32
-            arch: x64
+          # - os: windows-latest
+          #   platform: win32
+          #   arch: x64
     
     runs-on: ${{ matrix.os }}
     
@@ -154,46 +154,46 @@ jobs:
         }
         GYEOF
     
-    - name: Build static libraries (Windows)
-      if: matrix.os == 'windows-latest'
-      shell: pwsh
-      run: |
-        vcpkg install libpqxx:x64-windows-static openssl:x64-windows-static --recurse
-        
-        # Create binding.gyp for Windows
-        @"
-        {
-          "targets": [{
-            "target_name": "pgnx",
-            "sources": ["src/addon.cpp", "src/connection_pool.cpp", "src/connection.cpp", "src/listener.cpp"],
-            "include_dirs": [
-              "<!@(node -p \"require('node-addon-api').include\")",
-              "C:/vcpkg/installed/x64-windows-static/include"
-            ],
-            "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS"],
-            "libraries": [
-              "C:/vcpkg/installed/x64-windows-static/lib/pqxx.lib",
-              "C:/vcpkg/installed/x64-windows-static/lib/libpq.lib",
-              "C:/vcpkg/installed/x64-windows-static/lib/libpgcommon.lib",
-              "C:/vcpkg/installed/x64-windows-static/lib/libpgport.lib",
-              "C:/vcpkg/installed/x64-windows-static/lib/libssl.lib",
-              "C:/vcpkg/installed/x64-windows-static/lib/libcrypto.lib",
-              "ws2_32.lib",
-              "secur32.lib",
-              "crypt32.lib",
-              "wldap32.lib",
-              "advapi32.lib"
-            ],
-            "msvs_settings": {
-              "VCCLCompilerTool": {
-                "ExceptionHandling": 1,
-                "RuntimeTypeInfo": "true",
-                "AdditionalOptions": ["/std:c++17", "/EHsc"]
-              }
-            }
-          }]
-        }
-        "@ | Out-File -FilePath $env:GITHUB_WORKSPACE/binding.gyp -Encoding utf8
+    # - name: Build static libraries (Windows)
+    #   if: matrix.os == 'windows-latest'
+    #   shell: pwsh
+    #   run: |
+    #     vcpkg install libpqxx:x64-windows-static openssl:x64-windows-static --recurse
+    #     
+    #     # Create binding.gyp for Windows
+    #     @"
+    #     {
+    #       "targets": [{
+    #         "target_name": "pgnx",
+    #         "sources": ["src/addon.cpp", "src/connection_pool.cpp", "src/connection.cpp", "src/listener.cpp"],
+    #         "include_dirs": [
+    #           "<!@(node -p \"require('node-addon-api').include\")",
+    #           "C:/vcpkg/installed/x64-windows-static/include"
+    #         ],
+    #         "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS"],
+    #         "libraries": [
+    #           "C:/vcpkg/installed/x64-windows-static/lib/pqxx.lib",
+    #           "C:/vcpkg/installed/x64-windows-static/lib/libpq.lib",
+    #           "C:/vcpkg/installed/x64-windows-static/lib/libpgcommon.lib",
+    #           "C:/vcpkg/installed/x64-windows-static/lib/libpgport.lib",
+    #           "C:/vcpkg/installed/x64-windows-static/lib/libssl.lib",
+    #           "C:/vcpkg/installed/x64-windows-static/lib/libcrypto.lib",
+    #           "ws2_32.lib",
+    #           "secur32.lib",
+    #           "crypt32.lib",
+    #           "wldap32.lib",
+    #           "advapi32.lib"
+    #         ],
+    #         "msvs_settings": {
+    #           "VCCLCompilerTool": {
+    #             "ExceptionHandling": 1,
+    #             "RuntimeTypeInfo": "true",
+    #             "AdditionalOptions": ["/std:c++17", "/EHsc"]
+    #           }
+    #         }
+    #       }]
+    #     }
+    #     "@ | Out-File -FilePath $env:GITHUB_WORKSPACE/binding.gyp -Encoding utf8
     
     - name: Install npm dependencies
       run: npm install --ignore-scripts
