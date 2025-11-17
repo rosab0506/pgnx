@@ -1,5 +1,5 @@
 {
-  "name": "test_pgnx",
+  "name": "pgnx",
   "version": "1.0.3",
   "description": "High-performance PostgreSQL driver for Node.js using libpqxx and N-API",
   "main": "index.js",
