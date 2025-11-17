@@ -33,11 +33,31 @@ jobs:
       with:
         node-version: '20'
     
-    - name: Install dependencies (Linux)
+    - name: Build minimal static PostgreSQL (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libpqxx-dev postgresql-server-dev-16 build-essential
+        sudo apt-get install -y build-essential libssl-dev zlib1g-dev
+        
+        cd /tmp
+        wget -q https://ftp.postgresql.org/pub/source/v16.0/postgresql-16.0.tar.gz
+        tar -xzf postgresql-16.0.tar.gz
+        cd postgresql-16.0
+        ./configure --prefix=/tmp/pgsql --without-readline --without-zlib --without-gssapi --without-ldap --without-icu --with-openssl --quiet
+        make -C src/interfaces/libpq -j$(nproc) --quiet
+        make -C src/interfaces/libpq install --quiet
+        make -C src/bin/pg_config install --quiet
+        make -C src/include install --quiet
+        
+        cd /tmp
+        wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.8.1.tar.gz
+        tar -xzf 7.8.1.tar.gz
+        cd libpqxx-7.8.1
+        CXXFLAGS="-fPIC -O2" ./configure --prefix=/tmp/pgsql --enable-static --disable-shared --with-postgres-include=/tmp/pgsql/include --with-postgres-lib=/tmp/pgsql/lib PKG_CONFIG_PATH=/tmp/pgsql/lib/pkgconfig --quiet
+        make -j$(nproc) --quiet
+        make install --quiet
+        
+        echo "PGSQL_PREFIX=/tmp/pgsql" >> $GITHUB_ENV
     
     - name: Install dependencies (macOS)
       if: matrix.os == 'macos-latest'
@@ -58,6 +78,12 @@ jobs:
     - name: Install npm dependencies (skip install script)
       run: npm install --ignore-scripts
     
+    - name: Build (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        export PKG_CONFIG_PATH=/tmp/pgsql/lib/pkgconfig
+        npx node-gyp rebuild --pgsql_prefix=/tmp/pgsql
+    
     - name: Build (Windows)
       if: matrix.os == 'windows-latest'
       run: |
@@ -65,8 +91,8 @@ jobs:
         npx node-gyp rebuild
       shell: pwsh
     
-    - name: Build (Unix)
-      if: matrix.os != 'windows-latest'
+    - name: Build (macOS)
+      if: matrix.os == 'macos-latest'
       run: npx node-gyp rebuild
     
     - name: Get version and ABI
