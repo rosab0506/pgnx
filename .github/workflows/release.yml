@@ -58,7 +58,7 @@ jobs:
         wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.8.1.tar.gz
         tar xzf 7.8.1.tar.gz
         cd libpqxx-7.8.1
-        CXXFLAGS="-fPIC -O3" ./configure --prefix=/tmp/pgsql --enable-shared=no --with-postgres-include=/tmp/pgsql/include --with-postgres-lib=/tmp/pgsql/lib
+        CXX="g++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure --prefix=/tmp/pgsql --enable-shared=no --with-postgres-include=/tmp/pgsql/include --with-postgres-lib=/tmp/pgsql/lib
         make -j$(nproc)
         make install
         
@@ -110,7 +110,7 @@ jobs:
         wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.8.1.tar.gz
         tar xzf 7.8.1.tar.gz
         cd libpqxx-7.8.1
-        CXXFLAGS="-fPIC -O3" ./configure --prefix=/tmp/pgsql --enable-shared=no --with-postgres-include=/tmp/pgsql/include --with-postgres-lib=/tmp/pgsql/lib
+        CXX="clang++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure --prefix=/tmp/pgsql --enable-shared=no --with-postgres-include=/tmp/pgsql/include --with-postgres-lib=/tmp/pgsql/lib
         make -j$(sysctl -n hw.ncpu)
         make install
         
@@ -158,8 +158,38 @@ jobs:
       if: matrix.os == 'windows-latest'
       shell: pwsh
       run: |
-        # vcpkg is pre-installed on GitHub Actions Windows runners
-        vcpkg install libpqxx:x64-windows openssl:x64-windows --recurse
+        vcpkg install libpqxx:x64-windows-static openssl:x64-windows-static --recurse
+        
+        # Create binding.gyp for Windows
+        @"
+        {
+          "targets": [{
+            "target_name": "pgnx",
+            "sources": ["src/addon.cpp", "src/connection_pool.cpp", "src/connection.cpp", "src/listener.cpp"],
+            "include_dirs": [
+              "<!@(node -p \"require('node-addon-api').include\")",
+              "C:/vcpkg/installed/x64-windows-static/include"
+            ],
+            "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS"],
+            "libraries": [
+              "C:/vcpkg/installed/x64-windows-static/lib/pqxx.lib",
+              "C:/vcpkg/installed/x64-windows-static/lib/libpq.lib",
+              "C:/vcpkg/installed/x64-windows-static/lib/libssl.lib",
+              "C:/vcpkg/installed/x64-windows-static/lib/libcrypto.lib",
+              "ws2_32.lib",
+              "secur32.lib",
+              "crypt32.lib"
+            ],
+            "msvs_settings": {
+              "VCCLCompilerTool": {
+                "ExceptionHandling": 1,
+                "RuntimeTypeInfo": "true",
+                "AdditionalOptions": ["/std:c++17", "/EHsc"]
+              }
+            }
+          }]
+        }
+        "@ | Out-File -FilePath $env:GITHUB_WORKSPACE/binding.gyp -Encoding utf8
     
     - name: Install npm dependencies
       run: npm install --ignore-scripts
