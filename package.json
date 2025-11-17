@@ -45,6 +45,7 @@
   "gypfile": true,
   "dependencies": {
     "node-addon-api": "^8.5.0",
+    "pg": "^8.16.3",
     "tar": "^7.4.3"
   },
   "devDependencies": {

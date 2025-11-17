@@ -9,7 +9,7 @@ async function runTests() {
     
     try {
         // Test 1: Basic connection
-        console.log('Test 1: Basic connection...');
+        console.log('Test 1: Basic connection...'); 
         const result = await conn.query('SELECT 1 as num');
         console.assert(result[0].num === 1, 'Basic query failed');
         console.log('✅ Pass\n');

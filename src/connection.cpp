@@ -26,7 +26,7 @@ inline Napi::Array ConvertResult(Napi::Env env, const pqxx::result& result) {
         auto row = Napi::Object::New(env);
         
         for (size_t j = 0; j < colCount; ++j) {
-            row.Set(result.column_name(j), FastConvert(env, result[static_cast<int>(i)][static_cast<int>(j)], result.column_type(static_cast<int>(j))));
+            row.Set(result.column_name(j), FastConvert(env, result[i][j], result.column_type(j)));
         }
         rows[i] = row;
     }
@@ -152,7 +152,6 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 Connection::Connection(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Connection>(info) {
     std::string connStr = info[0].As<Napi::String>().Utf8Value();
     size_t poolSize = info.Length() > 1 ? info[1].As<Napi::Number>().Uint32Value() : 10;
-    connStr_ = connStr;
     pool_ = std::make_shared<ConnectionPool>(connStr, poolSize);
 }
 
@@ -315,7 +314,7 @@ Napi::Value Connection::Listen(const Napi::CallbackInfo& info) {
         return env.Undefined();
     }
     
-    std::string connStr = connStr_;
+    std::string connStr = conn->connection_string();
     pool_->release(conn);
     
     auto listener = std::make_unique<Listener>(connStr, channel, callback);
