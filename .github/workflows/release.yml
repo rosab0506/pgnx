@@ -198,38 +198,22 @@ jobs:
     - name: Install npm dependencies
       run: npm install --ignore-scripts
     
-    - name: Build with prebuildify (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        npm install -D prebuildify
-        npx prebuildify --napi --strip
-    
-    - name: Build native addon (Linux/macOS)
-      if: matrix.os != 'windows-latest'
+    - name: Build native addon
       run: npx node-gyp rebuild
     
-    - name: Get ABI version
-      if: matrix.os != 'windows-latest'
-      id: version
+    - name: Create prebuild directory structure
       shell: bash
       run: |
-        ABI=$(node -p "process.versions.modules")
-        echo "ABI=$ABI" >> $GITHUB_OUTPUT
-    
-    - name: Create prebuild tarball (Linux/macOS)
-      if: matrix.os != 'windows-latest'
-      shell: bash
-      run: |
-        mkdir -p prebuilds
-        cd build/Release
-        tar -czf ../../prebuilds/pgnx-node-v${{ steps.version.outputs.ABI }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz pgnx.node
+        mkdir -p prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+        cp build/Release/pgnx.node prebuilds/${{ matrix.platform }}-${{ matrix.arch }}/pgnx.node
+        echo "Created prebuild:"
+        ls -lh prebuilds/${{ matrix.platform }}-${{ matrix.arch }}/
     
     - name: Upload prebuild artifact
       uses: actions/upload-artifact@v4
       with:
         name: prebuild-${{ matrix.platform }}-${{ matrix.arch }}
-        path: |
-          prebuilds/
+        path: prebuilds/
         retention-days: 1
 
   publish:
@@ -253,8 +237,7 @@ jobs:
     - name: Merge prebuilds into package
       run: |
         mkdir -p prebuilds
-        find prebuilds-temp -name "*.tar.gz" -exec cp {} prebuilds/ \;
-        find prebuilds-temp -type d -name "win32-*" -exec cp -r {} prebuilds/ \;
+        cp -r prebuilds-temp/prebuild-*/* prebuilds/
         echo "Prebuilds ready:"
         ls -lhR prebuilds/
     
@@ -266,7 +249,6 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: prebuilds/*.tar.gz
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

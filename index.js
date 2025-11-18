@@ -1,3 +1,5 @@
-const { Connection } = require('./build/Release/pgnx');
+const load = require('node-gyp-build');
+const native = load(__dirname);
 
-module.exports = { Connection };
+// Export the Connection class from the native module
+module.exports = { Connection: native.Connection };
