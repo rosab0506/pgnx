@@ -87,6 +87,7 @@ jobs:
           --prefix=/tmp/pgsql \
           --host=aarch64-linux-gnu \
           --without-readline \
+          --without-icu \
           --with-openssl \
           --with-includes=/usr/aarch64-linux-gnu/include \
           --with-libraries=/usr/aarch64-linux-gnu/lib
