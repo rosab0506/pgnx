@@ -388,9 +388,9 @@ jobs:
     - name: Merge prebuilds into package
       run: |
         mkdir -p prebuilds
-        find prebuilds-temp -name "*.tar.gz" -exec cp {} prebuilds/ \;
+        cp -r prebuilds-temp/prebuild-*/* prebuilds/
         echo "Prebuilds ready:"
-        ls -lh prebuilds/
+        ls -lhR prebuilds/
     
     - name: Publish to npm
       run: npm publish --access public
@@ -400,7 +400,6 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: prebuilds/*.tar.gz
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
