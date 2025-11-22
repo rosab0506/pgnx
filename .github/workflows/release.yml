@@ -10,21 +10,27 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-linux-cross:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            platform: linux
+          - platform: linux
             arch: x64
-          - os: macos-13
-            platform: darwin
+            target: x86_64-linux-gnu
+            cc: gcc
+            cxx: g++
+          - platform: linux
+            arch: arm64
+            target: aarch64-linux-gnu
+            cc: aarch64-linux-gnu-gcc
+            cxx: aarch64-linux-gnu-g++
+          - platform: win32
             arch: x64
-          - os: windows-latest
-            platform: win32
-            arch: x64
+            target: x86_64-w64-mingw32
+            cc: x86_64-w64-mingw32-gcc
+            cxx: x86_64-w64-mingw32-g++
     
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
@@ -34,13 +40,20 @@ jobs:
       with:
         node-version: '22'
     
-    - name: Build static libraries (Linux)
-      if: matrix.os == 'ubuntu-latest'
+    - name: Install cross-compilation toolchains
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libssl-dev
-        
-        # Build PostgreSQL
+        sudo apt-get install -y build-essential libssl-dev wget tar
+        if [ "${{ matrix.arch }}" = "arm64" ]; then
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        fi
+        if [ "${{ matrix.platform }}" = "win32" ]; then
+          sudo apt-get install -y mingw-w64
+        fi
+    
+    - name: Build PostgreSQL (Linux x64)
+      if: matrix.platform == 'linux' && matrix.arch == 'x64'
+      run: |
         cd /tmp
         wget -q https://ftp.postgresql.org/pub/source/v16.1/postgresql-16.1.tar.gz
         tar xzf postgresql-16.1.tar.gz
@@ -52,17 +65,95 @@ jobs:
         make -C src/include install
         make -C src/common -j$(nproc)
         make -C src/port -j$(nproc)
-        
-        # Build libpqxx
+    
+    - name: Build PostgreSQL (Linux ARM64)
+      if: matrix.platform == 'linux' && matrix.arch == 'arm64'
+      run: |
+        cd /tmp
+        wget -q https://ftp.postgresql.org/pub/source/v16.1/postgresql-16.1.tar.gz
+        tar xzf postgresql-16.1.tar.gz
+        cd postgresql-16.1
+        CC=aarch64-linux-gnu-gcc CFLAGS="-fPIC -O3" ./configure \
+          --prefix=/tmp/pgsql \
+          --host=aarch64-linux-gnu \
+          --without-readline \
+          --with-openssl
+        make -C src/interfaces/libpq -j$(nproc)
+        make -C src/interfaces/libpq install
+        make -C src/bin/pg_config install
+        make -C src/include install
+        make -C src/common -j$(nproc)
+        make -C src/port -j$(nproc)
+    
+    - name: Build PostgreSQL (Windows x64)
+      if: matrix.platform == 'win32'
+      run: |
+        cd /tmp
+        wget -q https://ftp.postgresql.org/pub/source/v16.1/postgresql-16.1.tar.gz
+        tar xzf postgresql-16.1.tar.gz
+        cd postgresql-16.1
+        CC=x86_64-w64-mingw32-gcc ./configure \
+          --prefix=/tmp/pgsql \
+          --host=x86_64-w64-mingw32 \
+          --without-readline \
+          --with-openssl
+        make -C src/interfaces/libpq -j$(nproc)
+        make -C src/interfaces/libpq install
+        make -C src/bin/pg_config install
+        make -C src/include install
+        make -C src/common -j$(nproc)
+        make -C src/port -j$(nproc)
+    
+    - name: Build libpqxx (Linux x64)
+      if: matrix.platform == 'linux' && matrix.arch == 'x64'
+      run: |
         cd /tmp
         wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.8.1.tar.gz
         tar xzf 7.8.1.tar.gz
         cd libpqxx-7.8.1
-        CXX="g++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure --prefix=/tmp/pgsql --enable-shared=no --with-postgres-include=/tmp/pgsql/include --with-postgres-lib=/tmp/pgsql/lib
+        CXX="g++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure \
+          --prefix=/tmp/pgsql \
+          --enable-shared=no \
+          --with-postgres-include=/tmp/pgsql/include \
+          --with-postgres-lib=/tmp/pgsql/lib
         make -j$(nproc)
         make install
-        
-        # Create binding.gyp
+    
+    - name: Build libpqxx (Linux ARM64)
+      if: matrix.platform == 'linux' && matrix.arch == 'arm64'
+      run: |
+        cd /tmp
+        wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.8.1.tar.gz
+        tar xzf 7.8.1.tar.gz
+        cd libpqxx-7.8.1
+        CXX="aarch64-linux-gnu-g++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure \
+          --prefix=/tmp/pgsql \
+          --host=aarch64-linux-gnu \
+          --enable-shared=no \
+          --with-postgres-include=/tmp/pgsql/include \
+          --with-postgres-lib=/tmp/pgsql/lib
+        make -j$(nproc)
+        make install
+    
+    - name: Build libpqxx (Windows x64)
+      if: matrix.platform == 'win32'
+      run: |
+        cd /tmp
+        wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.8.1.tar.gz
+        tar xzf 7.8.1.tar.gz
+        cd libpqxx-7.8.1
+        CXX="x86_64-w64-mingw32-g++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure \
+          --prefix=/tmp/pgsql \
+          --host=x86_64-w64-mingw32 \
+          --enable-shared=no \
+          --with-postgres-include=/tmp/pgsql/include \
+          --with-postgres-lib=/tmp/pgsql/lib
+        make -j$(nproc)
+        make install
+    
+    - name: Create binding.gyp (Linux)
+      if: matrix.platform == 'linux'
+      run: |
         cat > $GITHUB_WORKSPACE/binding.gyp << 'GYEOF'
         {
           "targets": [{
@@ -87,8 +178,95 @@ jobs:
         }
         GYEOF
     
-    - name: Build static libraries (macOS)
-      if: matrix.os == 'macos-13'
+    - name: Create binding.gyp (Windows)
+      if: matrix.platform == 'win32'
+      run: |
+        cat > $GITHUB_WORKSPACE/binding.gyp << 'GYEOF'
+        {
+          "targets": [{
+            "target_name": "pgnx",
+            "sources": ["src/addon.cpp", "src/connection_pool.cpp", "src/connection.cpp", "src/listener.cpp"],
+            "include_dirs": [
+              "<!@(node -p \"require('node-addon-api').include\")",
+              "/tmp/pgsql/include"
+            ],
+            "cflags!": ["-fno-exceptions", "-fno-rtti"],
+            "cflags_cc!": ["-fno-exceptions", "-fno-rtti"],
+            "cflags_cc": ["-std=c++17", "-fexceptions", "-frtti", "-O3"],
+            "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS", "WIN32"],
+            "libraries": [
+              "/tmp/pgsql/lib/libpqxx.a",
+              "/tmp/pgsql/lib/libpq.a",
+              "/tmp/postgresql-16.1/src/common/libpgcommon.a",
+              "/tmp/postgresql-16.1/src/port/libpgport.a",
+              "-lws2_32", "-lsecur32", "-lcrypt32", "-lwldap32"
+            ]
+          }]
+        }
+        GYEOF
+    
+    - name: Install npm dependencies
+      run: npm install --ignore-scripts
+    
+    - name: Build native addon (Linux x64)
+      if: matrix.platform == 'linux' && matrix.arch == 'x64'
+      run: npx node-gyp rebuild
+    
+    - name: Build native addon (Linux ARM64)
+      if: matrix.platform == 'linux' && matrix.arch == 'arm64'
+      run: |
+        export CC=aarch64-linux-gnu-gcc
+        export CXX=aarch64-linux-gnu-g++
+        export AR=aarch64-linux-gnu-ar
+        npx node-gyp rebuild --arch=arm64
+    
+    - name: Build native addon (Windows x64)
+      if: matrix.platform == 'win32'
+      run: |
+        export CC=x86_64-w64-mingw32-gcc
+        export CXX=x86_64-w64-mingw32-g++
+        export AR=x86_64-w64-mingw32-ar
+        npx node-gyp rebuild --arch=x64
+    
+    - name: Get ABI version
+      id: version
+      run: |
+        ABI=$(node -p "process.versions.modules")
+        echo "ABI=$ABI" >> $GITHUB_OUTPUT
+    
+    - name: Create prebuild tarball
+      run: |
+        mkdir -p prebuilds
+        cd build/Release
+        tar -czf ../../prebuilds/pgnx-node-v${{ steps.version.outputs.ABI }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz pgnx.node
+    
+    - name: Upload prebuild artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: prebuild-${{ matrix.platform }}-${{ matrix.arch }}
+        path: prebuilds/*.tar.gz
+        retention-days: 1
+
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - os: macos-13
+            arch: x64
+          - os: macos-14
+            arch: arm64
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    
+    - name: Build static libraries
       run: |
         brew install openssl@3
         
@@ -97,7 +275,13 @@ jobs:
         wget -q https://ftp.postgresql.org/pub/source/v16.1/postgresql-16.1.tar.gz
         tar xzf postgresql-16.1.tar.gz
         cd postgresql-16.1
-        CFLAGS="-fPIC -O3" ./configure --prefix=/tmp/pgsql --without-readline --without-icu --with-openssl --with-includes=$(brew --prefix openssl@3)/include --with-libraries=$(brew --prefix openssl@3)/lib
+        CFLAGS="-fPIC -O3" ./configure \
+          --prefix=/tmp/pgsql \
+          --without-readline \
+          --without-icu \
+          --with-openssl \
+          --with-includes=$(brew --prefix openssl@3)/include \
+          --with-libraries=$(brew --prefix openssl@3)/lib
         make -C src/interfaces/libpq -j$(sysctl -n hw.ncpu)
         make -C src/interfaces/libpq install
         make -C src/bin/pg_config install
@@ -110,7 +294,11 @@ jobs:
         wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.8.1.tar.gz
         tar xzf 7.8.1.tar.gz
         cd libpqxx-7.8.1
-        CXX="clang++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure --prefix=/tmp/pgsql --enable-shared=no --with-postgres-include=/tmp/pgsql/include --with-postgres-lib=/tmp/pgsql/lib
+        CXX="clang++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure \
+          --prefix=/tmp/pgsql \
+          --enable-shared=no \
+          --with-postgres-include=/tmp/pgsql/include \
+          --with-postgres-lib=/tmp/pgsql/lib
         make -j$(sysctl -n hw.ncpu)
         make install
         
@@ -154,47 +342,6 @@ jobs:
         }
         GYEOF
     
-    - name: Build static libraries (Windows)
-      if: matrix.os == 'windows-latest'
-      shell: pwsh
-      run: |
-        vcpkg install libpqxx:x64-windows-static openssl:x64-windows-static --recurse
-        
-        # Create binding.gyp for Windows
-        @"
-        {
-          "targets": [{
-            "target_name": "pgnx",
-            "sources": ["src/addon.cpp", "src/connection_pool.cpp", "src/connection.cpp", "src/listener.cpp"],
-            "include_dirs": [
-              "<!@(node -p \"require('node-addon-api').include\")",
-              "C:/vcpkg/installed/x64-windows-static/include"
-            ],
-            "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS"],
-            "libraries": [
-              "C:/vcpkg/installed/x64-windows-static/lib/pqxx.lib",
-              "C:/vcpkg/installed/x64-windows-static/lib/libpq.lib",
-              "C:/vcpkg/installed/x64-windows-static/lib/libpgcommon.lib",
-              "C:/vcpkg/installed/x64-windows-static/lib/libpgport.lib",
-              "C:/vcpkg/installed/x64-windows-static/lib/libssl.lib",
-              "C:/vcpkg/installed/x64-windows-static/lib/libcrypto.lib",
-              "ws2_32.lib",
-              "secur32.lib",
-              "crypt32.lib",
-              "wldap32.lib",
-              "advapi32.lib"
-            ],
-            "msvs_settings": {
-              "VCCLCompilerTool": {
-                "ExceptionHandling": 1,
-                "RuntimeTypeInfo": "true",
-                "AdditionalOptions": ["/std:c++17", "/EHsc"]
-              }
-            }
-          }]
-        }
-        "@ | Out-File -FilePath $env:GITHUB_WORKSPACE/binding.gyp -Encoding utf8
-    
     - name: Install npm dependencies
       run: npm install --ignore-scripts
     
@@ -203,27 +350,25 @@ jobs:
     
     - name: Get ABI version
       id: version
-      shell: bash
       run: |
         ABI=$(node -p "process.versions.modules")
         echo "ABI=$ABI" >> $GITHUB_OUTPUT
     
     - name: Create prebuild tarball
-      shell: bash
       run: |
         mkdir -p prebuilds
         cd build/Release
-        tar -czf ../../prebuilds/pgnx-node-v${{ steps.version.outputs.ABI }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz pgnx.node
+        tar -czf ../../prebuilds/pgnx-node-v${{ steps.version.outputs.ABI }}-darwin-${{ matrix.arch }}.tar.gz pgnx.node
     
     - name: Upload prebuild artifact
       uses: actions/upload-artifact@v4
       with:
-        name: prebuild-${{ matrix.platform }}-${{ matrix.arch }}
+        name: prebuild-darwin-${{ matrix.arch }}
         path: prebuilds/*.tar.gz
         retention-days: 1
 
   publish:
-    needs: build
+    needs: [build-linux-cross, build-macos]
     runs-on: ubuntu-latest
     
     steps:
