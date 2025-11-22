@@ -215,12 +215,8 @@ jobs:
               "/tmp/postgresql-16.1/src/port/libpgport.a",
               "-lws2_32", "-lsecur32", "-lcrypt32", "-lwldap32"
             ],
-            "ldflags": ["-static-libgcc", "-static-libstdc++"],
-            "conditions": [
-              ["OS=='win'", {
-                "ldflags!": ["-rdynamic"]
-              }]
-            ]
+            "ldflags!": ["-rdynamic"],
+            "ldflags": ["-static-libgcc", "-static-libstdc++"]
           }]
         }
         GYEOF
