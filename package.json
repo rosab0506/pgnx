@@ -57,9 +57,12 @@
     "pg": "^8.16.3"
   },
   "files": [
-    "prebuilds/**/*",
+    "prebuilds/",
+    "src/",
     "index.js",
     "index.d.ts",
+    "binding.gyp",
+    "pg_config_paths.h",
     "README.md",
     "LICENSE",
     "binding.gyp"

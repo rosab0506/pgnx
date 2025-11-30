@@ -1,5 +1,11 @@
-const load = require('node-gyp-build');
-const native = load(__dirname);
+const path = require('path');
 
-// Export the Connection class from the native module
-module.exports = { Connection: native.Connection };
+try {
+    const { Connection } = require(path.join(__dirname, 'build', 'Release', 'pgnx.node'));
+    module.exports = { Connection };
+} catch (error) {
+    throw new Error(
+        'Failed to load pgnx native addon. ' +
+        'Please reinstall: npm install pgnx'
+    );
+}
