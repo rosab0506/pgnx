@@ -1,6 +1,7 @@
 {
   "name": "@superdev22/pgnx",
-  "version": "2.3.0",
+  "version": "8.3.1",
+
   "description": "High-performance PostgreSQL driver for Node.js using libpqxx and N-API",
   "main": "index.js",
   "types": "index.d.ts",
