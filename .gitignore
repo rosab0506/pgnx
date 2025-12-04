@@ -4,3 +4,11 @@ build/
 .DS_Store
 test.js
 tests/
+
+# Conan artifacts
+conan.lock
+conaninfo.txt
+conanbuildinfo.*
+conan_paths.*
+graph_info.json
+CMakeFiles/

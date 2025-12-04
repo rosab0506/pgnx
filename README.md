@@ -23,10 +23,17 @@ High-performance PostgreSQL driver for Node.js using libpqxx and N-API. Drop-in 
 ## Installation
 
 ```bash
-npm install pgnx
+npm install @superdev22/pgnx
 ```
 
-That's it! Prebuilt binaries included for Linux, macOS, and Windows. No dependencies needed!
+**That's it!** The package includes prebuilt binaries for:
+- **Linux**: x64, ARM64
+- **macOS**: x64 (Intel), ARM64 (Apple Silicon)
+- **Windows**: x64
+
+✅ **Zero dependencies** - No Python, no Conan, no build tools required!  
+✅ **Platform-specific** - Downloads only the binary for your system  
+✅ **Works immediately** - No compilation needed
 
 ## Quick Start
 
@@ -132,7 +139,37 @@ conn.close();
 - Node.js >= 18.0.0
 - PostgreSQL server (for runtime connection)
 
-No build tools or system dependencies required!
+No build tools or system dependencies required for installation!
+
+## Building from Source
+
+**For developers only.** End users don't need to build from source.
+
+### Prerequisites
+
+- Node.js >= 18.0.0
+- Python 3.x
+- Conan package manager: `pip install conan`
+- C++ compiler (GCC, Clang, or MSVC)
+
+### Build Steps
+
+```bash
+# Clone the repository
+git clone https://github.com/Lumos-Labs-HQ/pgnx.git
+cd pgnx
+
+# Install dependencies
+npm install --ignore-scripts
+
+# Build the native addon
+npm run build
+
+# Test
+npm test
+```
+
+The build process uses Conan to manage C++ dependencies (libpqxx, libpq, OpenSSL, zlib) with static linking.
 
 ## License
 

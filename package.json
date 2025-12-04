@@ -5,8 +5,10 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
+    "install": "node-gyp-build",
     "test": "node test/index.test.js",
-    "build": "node-gyp rebuild"
+    "build": "node-gyp rebuild",
+    "rebuild": "node-gyp rebuild"
   },
   "repository": {
     "type": "git",
