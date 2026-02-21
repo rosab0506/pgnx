@@ -25,9 +25,9 @@ public:
     bool closed();
 
 private:
-    bool isHealthy(const std::shared_ptr<pqxx::connection>& conn);
+    bool isHealthy(const PooledConnection& pooled);
     std::shared_ptr<pqxx::connection> createConnection();
-    
+
     std::string connStr_;
     size_t poolSize_;
     size_t currentSize_;
@@ -35,4 +35,5 @@ private:
     std::mutex mutex_;
     bool closed_ = false;
     static constexpr int MAX_IDLE_SECONDS = 300;
+    static constexpr int HEALTH_CHECK_IDLE_SECONDS = 30;
 };

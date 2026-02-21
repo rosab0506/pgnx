@@ -15,6 +15,7 @@ void Listener::start() {
 }
 
 void Listener::stop() {
+    if (stopped_.exchange(true)) return;
     running_ = false;
     if (thread_.joinable()) thread_.join();
     tsfn_.Release();
@@ -23,19 +24,26 @@ void Listener::stop() {
 void Listener::listen() {
     try {
         pqxx::connection conn(connStr_);
-        pqxx::work txn(conn);
-        txn.exec("LISTEN " + conn.quote_name(channel_));
-        txn.commit();
+
+        // Use libpqxx 7.10+ listen() API with notification handler
+        conn.listen(channel_,
+            [this](pqxx::notification n) {
+                if (!running_) return;
+                std::string payload{n.payload};
+                tsfn_.BlockingCall([payload](Napi::Env env, Napi::Function jsCallback) {
+                    jsCallback.Call({Napi::String::New(env, payload)});
+                });
+            });
 
         while (running_) {
-            conn.await_notification(100, 0);
-            
-            int count = conn.get_notifs();
-            if (count > 0) {
-                tsfn_.BlockingCall([](Napi::Env env, Napi::Function jsCallback) {
-                    jsCallback.Call({Napi::String::New(env, "notification")});
-                });
-            }
+            conn.await_notification(1);
         }
-    } catch (...) {}
+    } catch (const std::exception& e) {
+        if (!running_) return;
+        std::string errMsg = e.what();
+        tsfn_.BlockingCall([errMsg](Napi::Env env, Napi::Function jsCallback) {
+            auto error = Napi::Error::New(env, errMsg);
+            jsCallback.Call({error.Value()});
+        });
+    }
 }

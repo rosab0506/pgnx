@@ -29,34 +29,32 @@ jobs:
             target: x86_64-w64-mingw32
             cc: x86_64-w64-mingw32-gcc
             cxx: x86_64-w64-mingw32-g++
-    
+
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22'
-    
+
     - name: Install Python and Conan
       run: |
         sudo apt-get update
         sudo apt-get install -y python3 python3-pip pipx
         pipx install conan
         echo "$HOME/.local/bin" >> $GITHUB_PATH
-    
+
     - name: Install cross-compilation toolchains
       run: |
         sudo apt-get install -y build-essential libssl-dev wget tar zlib1g-dev
         if [ "${{ matrix.arch }}" = "arm64" ]; then
           sudo dpkg --add-architecture arm64
-          # Add ARM64 repositories
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
-          # Disable problematic security sources for ARM64
           sudo sed -i 's/^deb \[arch=amd64,i386\]/deb [arch=amd64,i386]/' /etc/apt/sources.list
           sudo sed -i '/security\.ubuntu\.com.*arm64/d' /etc/apt/sources.list
           sudo apt-get update || true
@@ -66,12 +64,12 @@ jobs:
         if [ "${{ matrix.platform }}" = "win32" ]; then
           sudo apt-get install -y mingw-w64
         fi
-    
+
     - name: Setup dependencies with Conan
       run: |
         chmod +x $GITHUB_WORKSPACE/scripts/conan-setup.sh
         bash $GITHUB_WORKSPACE/scripts/conan-setup.sh ${{ matrix.platform }} ${{ matrix.arch }}
-    
+
     - name: Create binding.gyp (Linux)
       if: matrix.platform == 'linux'
       run: |
@@ -87,7 +85,7 @@ jobs:
             "cflags!": ["-fno-exceptions", "-fno-rtti"],
             "cflags_cc!": ["-fno-exceptions", "-fno-rtti"],
             "cflags_cc": ["-std=c++17", "-fexceptions", "-frtti", "-O3"],
-            "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS"],
+            "defines": ["NAPI_VERSION=8"],
             "libraries": [
               "/tmp/pgsql/lib/libpqxx.a",
               "/tmp/pgsql/lib/libpq.a",
@@ -98,7 +96,7 @@ jobs:
           }]
         }
         GYEOF
-    
+
     - name: Create binding.gyp (Windows)
       if: matrix.platform == 'win32'
       run: |
@@ -114,7 +112,7 @@ jobs:
             "cflags!": ["-fno-exceptions", "-fno-rtti"],
             "cflags_cc!": ["-fno-exceptions", "-fno-rtti"],
             "cflags_cc": ["-std=c++17", "-fexceptions", "-frtti", "-O3"],
-            "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS", "WIN32"],
+            "defines": ["NAPI_VERSION=8", "WIN32"],
             "libraries": [
               "/tmp/pgsql/lib/libpqxx.a",
               "/tmp/pgsql/lib/libpq.a",
@@ -128,14 +126,14 @@ jobs:
           }]
         }
         GYEOF
-    
+
     - name: Install npm dependencies
       run: npm install --ignore-scripts
-    
+
     - name: Build native addon (Linux x64)
       if: matrix.platform == 'linux' && matrix.arch == 'x64'
       run: npx node-gyp rebuild
-    
+
     - name: Build native addon (Linux ARM64)
       if: matrix.platform == 'linux' && matrix.arch == 'arm64'
       run: |
@@ -143,7 +141,7 @@ jobs:
         export CXX=aarch64-linux-gnu-g++
         export AR=aarch64-linux-gnu-ar
         npx node-gyp rebuild --arch=arm64
-    
+
     - name: Build native addon (Windows x64)
       if: matrix.platform == 'win32'
       run: |
@@ -152,24 +150,16 @@ jobs:
         export AR=x86_64-w64-mingw32-ar
         export LINK=x86_64-w64-mingw32-g++
         export LDFLAGS="-static-libgcc -static-libstdc++"
-        # Install Node.js headers first
         npx node-gyp install
-        # Download Node.js Windows libraries
         NODE_VERSION=$(node -v | sed 's/v//')
         wget -q https://nodejs.org/download/release/v${NODE_VERSION}/win-x64/node.lib -O /tmp/node.lib
         npx node-gyp rebuild --arch=x64
-    
-    - name: Get ABI version
-      id: version
-      run: |
-        ABI=$(node -p "process.versions.modules")
-        echo "ABI=$ABI" >> $GITHUB_OUTPUT
-    
+
     - name: Create prebuild directory structure
       run: |
         mkdir -p prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
         cp build/Release/pgnx.node prebuilds/${{ matrix.platform }}-${{ matrix.arch }}/pgnx.node
-    
+
     - name: Upload prebuild artifact
       uses: actions/upload-artifact@v4
       with:
@@ -185,31 +175,31 @@ jobs:
             arch: x64
           - os: macos-14
             arch: arm64
-    
+
     runs-on: ${{ matrix.os }}
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22'
-    
+
     - name: Install Python and Conan
       run: |
         brew install pipx
         pipx install conan
         echo "$HOME/.local/bin" >> $GITHUB_PATH
-    
+
     - name: Install dependencies
       run: |
         brew install openssl@3
-    
+
     - name: Setup Conan profile
       run: |
         conan profile detect --force
-    
+
     - name: Install Conan dependencies
       run: |
         mkdir -p build-conan
@@ -219,7 +209,7 @@ jobs:
           -s build_type=Release \
           -s compiler.cppstd=17 \
           -o "*:shared=False"
-    
+
     - name: Build PostgreSQL
       run: |
         cd /tmp
@@ -239,7 +229,7 @@ jobs:
         make -C src/include install
         make -C src/common -j$(sysctl -n hw.ncpu)
         make -C src/port -j$(sysctl -n hw.ncpu)
-    
+
     - name: Build libpqxx
       run: |
         cd /tmp
@@ -253,27 +243,31 @@ jobs:
           --with-postgres-lib=/tmp/pgsql/lib
         make -j$(sysctl -n hw.ncpu)
         make install
-    
+
     - name: Create binding.gyp
       run: |
-        cat > $GITHUB_WORKSPACE/binding.gyp << 'GYEOF'
+        OPENSSL_PREFIX=$(brew --prefix openssl@3)
+        cat > $GITHUB_WORKSPACE/binding.gyp << GYEOF
         {
           "targets": [{
             "target_name": "pgnx",
             "sources": ["src/addon.cpp", "src/connection_pool.cpp", "src/connection.cpp", "src/listener.cpp"],
             "include_dirs": [
-              "<!@(node -p \"require('node-addon-api').include\")",
+              "<!@(node -p \\"require('node-addon-api').include\\")",
               "/tmp/pgsql/include"
             ],
             "cflags!": ["-fno-exceptions", "-fno-rtti"],
             "cflags_cc!": ["-fno-exceptions", "-fno-rtti"],
             "cflags_cc": ["-std=c++17", "-fexceptions", "-frtti", "-O3"],
-            "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS"],
+            "defines": ["NAPI_VERSION=8"],
             "libraries": [
               "/tmp/pgsql/lib/libpqxx.a",
               "/tmp/pgsql/lib/libpq.a",
               "/tmp/postgresql-16.1/src/common/libpgcommon.a",
-              "/tmp/postgresql-16.1/src/port/libpgport.a"
+              "/tmp/postgresql-16.1/src/port/libpgport.a",
+              "${OPENSSL_PREFIX}/lib/libssl.a",
+              "${OPENSSL_PREFIX}/lib/libcrypto.a",
+              "-lz"
             ],
             "xcode_settings": {
               "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
@@ -284,34 +278,24 @@ jobs:
                 "-framework", "CoreFoundation",
                 "-framework", "Security"
               ],
-              "OTHER_CFLAGS": [
-                "-I$(brew --prefix openssl@3)/include"
-              ],
-              "OTHER_CPLUSPLUSFLAGS": [
-                "-I$(brew --prefix openssl@3)/include"
-              ]
+              "OTHER_CFLAGS": ["-I${OPENSSL_PREFIX}/include"],
+              "OTHER_CPLUSPLUSFLAGS": ["-I${OPENSSL_PREFIX}/include"]
             }
           }]
         }
         GYEOF
-    
+
     - name: Install npm dependencies
       run: npm install --ignore-scripts
-    
+
     - name: Build native addon
       run: npx node-gyp rebuild
-    
-    - name: Get ABI version
-      id: version
-      run: |
-        ABI=$(node -p "process.versions.modules")
-        echo "ABI=$ABI" >> $GITHUB_OUTPUT
-    
+
     - name: Create prebuild directory structure
       run: |
         mkdir -p prebuilds/darwin-${{ matrix.arch }}
         cp build/Release/pgnx.node prebuilds/darwin-${{ matrix.arch }}/pgnx.node
-    
+
     - name: Upload prebuild artifact
       uses: actions/upload-artifact@v4
       with:
@@ -322,25 +306,24 @@ jobs:
   publish:
     needs: [build-linux-cross, build-macos]
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22'
         registry-url: 'https://registry.npmjs.org'
-    
+
     - name: Download all prebuilds
       uses: actions/download-artifact@v4
       with:
         path: prebuilds-temp
-    
+
     - name: Merge prebuilds into package
       run: |
         mkdir -p prebuilds
-        # Merge all platform-specific directories
         for dir in prebuilds-temp/prebuild-*/prebuilds/*; do
           if [ -d "$dir" ]; then
             platform_arch=$(basename "$dir")
@@ -350,12 +333,12 @@ jobs:
         done
         echo "Prebuilds ready:"
         ls -lhR prebuilds/
-    
+
     - name: Publish to npm
       run: npm publish --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-    
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:

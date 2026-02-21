@@ -1,42 +1,46 @@
-export interface ConnectionConfig {
-  connectionString: string;
-  poolSize?: number;
-}
-
-export interface QueryResult<T = any> {
-  rows: T[];
-  rowCount: number;
+export interface PoolStatus {
+    available: number;
+    current: number;
+    max: number;
+    closed: boolean;
 }
 
 export class Connection {
-  constructor(connectionString: string, poolSize?: number);
-  
-  query<T = any>(sql: string, params?: any[]): Promise<T[]>;
-  prepare(name: string, sql: string): void;
-  execute<T = any>(name: string, params?: any[]): Promise<T[]>;
-  pipeline(queries: string[]): Promise<number[]>;
-  listen(channel: string, callback: (payload: string) => void): void;
-  unlisten(channel: string): void;
-  close(): void;
-  poolStatus?(): { available: number; current: number; max: number; closed: boolean };
-}
+    constructor(connectionString: string, poolSize?: number);
 
-export interface PoolConfig {
-  min?: number;
-  max?: number;
-  idleTimeoutMillis?: number;
-  connectionTimeoutMillis?: number;
-}
+    /** Execute a query asynchronously with optional parameters */
+    query<T = any>(sql: string, params?: any[]): Promise<T[]>;
 
-export class Pool {
-  constructor(config: string | ConnectionConfig);
-  
-  query<T = any>(sql: string, params?: any[]): Promise<T[]>;
-  connect(): Promise<PoolClient>;
-  end(): Promise<void>;
-}
+    /** Execute a query synchronously with optional parameters */
+    querySync<T = any>(sql: string, params?: any[]): T[];
 
-export interface PoolClient {
-  query<T = any>(sql: string, params?: any[]): Promise<T[]>;
-  release(): void;
+    /** Register a prepared statement */
+    prepare(name: string, sql: string): void;
+
+    /** Execute a previously prepared statement */
+    execute<T = any>(name: string, params?: any[]): Promise<T[]>;
+
+    /** Execute multiple queries in a pipeline, returns affected row counts */
+    pipeline(queries: string[]): Promise<number[]>;
+
+    /** Begin a transaction */
+    begin(): Promise<void>;
+
+    /** Commit the current transaction */
+    commit(): Promise<void>;
+
+    /** Rollback the current transaction */
+    rollback(): Promise<void>;
+
+    /** Listen for PostgreSQL NOTIFY events on a channel */
+    listen(channel: string, callback: (payload: string) => void): void;
+
+    /** Stop listening on a channel */
+    unlisten(channel: string): void;
+
+    /** Get current pool status */
+    poolStatus(): PoolStatus;
+
+    /** Close all connections and clean up */
+    close(): void;
 }

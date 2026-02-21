@@ -24,8 +24,9 @@ mkdir -p $BUILD_DIR
 cd $BUILD_DIR
 
 # Install dependencies via Conan
+WORKSPACE=${GITHUB_WORKSPACE:-$(pwd)}
 echo "Installing dependencies via Conan..."
-conan install $GITHUB_WORKSPACE \
+conan install $WORKSPACE \
     --build=missing \
     -s build_type=Release \
     -s compiler.cppstd=17 \

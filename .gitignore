@@ -2,8 +2,6 @@ node_modules/
 build/
 *.log
 .DS_Store
-test.js
-tests/
 
 # Conan artifacts
 conan.lock
@@ -11,4 +9,19 @@ conaninfo.txt
 conanbuildinfo.*
 conan_paths.*
 graph_info.json
+
+# CMake artifacts
 CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+build-cmake/
+
+# IDE
+.vscode/
+.idea/
+
+# Build outputs
+*.node
+prebuilds/

@@ -12,7 +12,9 @@ try {
     } catch (buildError) {
         throw new Error(
             'Failed to load pgnx native addon. ' +
-            'Please reinstall: npm install @superdev22/pgnx or rebuild: npm run build'
+            'Make sure prebuilt binaries are available for your platform, ' +
+            'or rebuild from source: npm run build\n' +
+            'Error: ' + (error.message || buildError.message)
         );
     }
 }

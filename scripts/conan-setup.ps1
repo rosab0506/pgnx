@@ -24,8 +24,9 @@ New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 Set-Location $BuildDir
 
 # Install dependencies via Conan
+$Workspace = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { (Get-Location).Path }
 Write-Host "Installing dependencies via Conan..."
-conan install $env:GITHUB_WORKSPACE `
+conan install $Workspace `
     --build=missing `
     -s build_type=Release `
     -s compiler.cppstd=17 `

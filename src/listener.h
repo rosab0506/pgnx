@@ -21,4 +21,5 @@ private:
     Napi::ThreadSafeFunction tsfn_;
     std::thread thread_;
     std::atomic<bool> running_{false};
+    std::atomic<bool> stopped_{false};
 };
