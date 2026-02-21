@@ -16,17 +16,14 @@ jobs:
         include:
           - platform: linux
             arch: x64
-            target: x86_64-linux-gnu
             cc: gcc
             cxx: g++
           - platform: linux
             arch: arm64
-            target: aarch64-linux-gnu
             cc: aarch64-linux-gnu-gcc
             cxx: aarch64-linux-gnu-g++
           - platform: win32
             arch: x64
-            target: x86_64-w64-mingw32
             cc: x86_64-w64-mingw32-gcc
             cxx: x86_64-w64-mingw32-g++
 
@@ -40,16 +37,10 @@ jobs:
       with:
         node-version: '22'
 
-    - name: Install Python and Conan
+    - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3 python3-pip pipx
-        pipx install conan
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-    - name: Install cross-compilation toolchains
-      run: |
-        sudo apt-get install -y build-essential libssl-dev wget tar zlib1g-dev
+        sudo apt-get install -y build-essential cmake libssl-dev zlib1g-dev wget tar
         if [ "${{ matrix.arch }}" = "arm64" ]; then
           sudo dpkg --add-architecture arm64
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
@@ -65,10 +56,74 @@ jobs:
           sudo apt-get install -y mingw-w64
         fi
 
-    - name: Setup dependencies with Conan
+    - name: Build PostgreSQL 16.1
       run: |
-        chmod +x $GITHUB_WORKSPACE/scripts/conan-setup.sh
-        bash $GITHUB_WORKSPACE/scripts/conan-setup.sh ${{ matrix.platform }} ${{ matrix.arch }}
+        cd /tmp
+        wget -q https://ftp.postgresql.org/pub/source/v16.1/postgresql-16.1.tar.gz
+        tar xzf postgresql-16.1.tar.gz
+        cd postgresql-16.1
+        if [ "${{ matrix.platform }}" = "linux" ] && [ "${{ matrix.arch }}" = "x64" ]; then
+          CFLAGS="-fPIC -O3" ./configure \
+            --prefix=/tmp/pgsql \
+            --without-readline \
+            --without-icu \
+            --with-openssl
+        elif [ "${{ matrix.platform }}" = "linux" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
+          CC=aarch64-linux-gnu-gcc CFLAGS="-fPIC -O3" ./configure \
+            --prefix=/tmp/pgsql \
+            --host=aarch64-linux-gnu \
+            --without-readline \
+            --without-icu \
+            --with-openssl \
+            --with-includes="/usr/aarch64-linux-gnu/include" \
+            --with-libraries="/usr/aarch64-linux-gnu/lib"
+        elif [ "${{ matrix.platform }}" = "win32" ]; then
+          CC=x86_64-w64-mingw32-gcc ./configure \
+            --prefix=/tmp/pgsql \
+            --host=x86_64-w64-mingw32 \
+            --without-readline \
+            --without-icu \
+            --without-zlib
+        fi
+        make -C src/interfaces/libpq -j$(nproc)
+        make -C src/interfaces/libpq install
+        make -C src/bin/pg_config install
+        make -C src/include install
+        make -C src/common -j$(nproc)
+        make -C src/port -j$(nproc)
+
+    - name: Build libpqxx 7.10.4
+      run: |
+        cd /tmp
+        wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.10.4.tar.gz
+        tar xzf 7.10.4.tar.gz
+        cd libpqxx-7.10.4
+        mkdir build && cd build
+
+        CMAKE_ARGS="-DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/tmp/pgsql \
+          -DCMAKE_CXX_STANDARD=17 \
+          -DCMAKE_CXX_FLAGS=-fPIC \
+          -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+          -DBUILD_SHARED_LIBS=OFF \
+          -DSKIP_BUILD_TEST=ON \
+          -DBUILD_DOC=OFF \
+          -DPostgreSQL_INCLUDE_DIR=/tmp/pgsql/include \
+          -DPostgreSQL_LIBRARY=/tmp/pgsql/lib/libpq.a \
+          -DPostgreSQL_TYPE_INCLUDE_DIR=/tmp/pgsql/include"
+
+        if [ "${{ matrix.arch }}" = "arm64" ]; then
+          CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64"
+        fi
+
+        if [ "${{ matrix.platform }}" = "win32" ]; then
+          CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=AMD64"
+        fi
+
+        cmake .. $CMAKE_ARGS
+        cmake --build . -j$(nproc)
+        cmake --install .
 
     - name: Create binding.gyp (Linux)
       if: matrix.platform == 'linux'
@@ -186,43 +241,24 @@ jobs:
       with:
         node-version: '22'
 
-    - name: Install Python and Conan
-      run: |
-        brew install pipx
-        pipx install conan
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-
     - name: Install dependencies
       run: |
         brew install openssl@3
 
-    - name: Setup Conan profile
-      run: |
-        conan profile detect --force
-
-    - name: Install Conan dependencies
-      run: |
-        mkdir -p build-conan
-        cd build-conan
-        conan install $GITHUB_WORKSPACE \
-          --build=missing \
-          -s build_type=Release \
-          -s compiler.cppstd=17 \
-          -o "*:shared=False"
-
-    - name: Build PostgreSQL
+    - name: Build PostgreSQL 16.1
       run: |
         cd /tmp
         wget -q https://ftp.postgresql.org/pub/source/v16.1/postgresql-16.1.tar.gz
         tar xzf postgresql-16.1.tar.gz
         cd postgresql-16.1
+        OPENSSL_PREFIX=$(brew --prefix openssl@3)
         CFLAGS="-fPIC -O3" ./configure \
           --prefix=/tmp/pgsql \
           --without-readline \
           --without-icu \
           --with-openssl \
-          --with-includes=$(brew --prefix openssl@3)/include \
-          --with-libraries=$(brew --prefix openssl@3)/lib
+          --with-includes=${OPENSSL_PREFIX}/include \
+          --with-libraries=${OPENSSL_PREFIX}/lib
         make -C src/interfaces/libpq -j$(sysctl -n hw.ncpu)
         make -C src/interfaces/libpq install
         make -C src/bin/pg_config install
@@ -230,19 +266,26 @@ jobs:
         make -C src/common -j$(sysctl -n hw.ncpu)
         make -C src/port -j$(sysctl -n hw.ncpu)
 
-    - name: Build libpqxx
+    - name: Build libpqxx 7.10.4
       run: |
         cd /tmp
-        wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.8.1.tar.gz
-        tar xzf 7.8.1.tar.gz
-        cd libpqxx-7.8.1
-        CXX="clang++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure \
-          --prefix=/tmp/pgsql \
-          --enable-shared=no \
-          --with-postgres-include=/tmp/pgsql/include \
-          --with-postgres-lib=/tmp/pgsql/lib
-        make -j$(sysctl -n hw.ncpu)
-        make install
+        wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.10.4.tar.gz
+        tar xzf 7.10.4.tar.gz
+        cd libpqxx-7.10.4
+        mkdir build && cd build
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/tmp/pgsql \
+          -DCMAKE_CXX_STANDARD=17 \
+          -DCMAKE_CXX_FLAGS="-fPIC -O3" \
+          -DBUILD_SHARED_LIBS=OFF \
+          -DSKIP_BUILD_TEST=ON \
+          -DBUILD_DOC=OFF \
+          -DPostgreSQL_INCLUDE_DIR=/tmp/pgsql/include \
+          -DPostgreSQL_LIBRARY=/tmp/pgsql/lib/libpq.a \
+          -DPostgreSQL_TYPE_INCLUDE_DIR=/tmp/pgsql/include
+        cmake --build . -j$(sysctl -n hw.ncpu)
+        cmake --install .
 
     - name: Create binding.gyp
       run: |

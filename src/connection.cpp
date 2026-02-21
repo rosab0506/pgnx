@@ -1,5 +1,4 @@
 #include "connection.h"
-#include <pqxx/params.hxx>
 #include <thread>
 #include <cmath>
 #include <optional>

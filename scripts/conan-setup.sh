@@ -3,117 +3,111 @@ set -e
 
 PLATFORM=$1
 ARCH=$2
-BUILD_DIR=${3:-/tmp/pgnx-build}
+INSTALL_PREFIX=${3:-/tmp/pgsql}
 
-echo "=== Conan Setup for pgnx ==="
+echo "=== Building pgnx native dependencies ==="
 echo "Platform: $PLATFORM"
 echo "Architecture: $ARCH"
-echo "Build directory: $BUILD_DIR"
+echo "Install prefix: $INSTALL_PREFIX"
 
-# Install Conan if not present
-if ! command -v conan &> /dev/null; then
-    echo "Installing Conan..."
-    pip3 install conan
-fi
+NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-# Initialize Conan profile if needed
-conan profile detect --force || true
-
-# Create build directory
-mkdir -p $BUILD_DIR
-cd $BUILD_DIR
-
-# Install dependencies via Conan
-WORKSPACE=${GITHUB_WORKSPACE:-$(pwd)}
-echo "Installing dependencies via Conan..."
-conan install $WORKSPACE \
-    --build=missing \
-    -s build_type=Release \
-    -s compiler.cppstd=17 \
-    -o "*:shared=False"
-
-# Source the generated paths
-if [ -f "conan_paths.sh" ]; then
-    source conan_paths.sh
-fi
-
-# Now build PostgreSQL and libpqxx
-echo "Building PostgreSQL..."
+# Build PostgreSQL 16.1 (for libpq)
+echo "Building PostgreSQL 16.1..."
 cd /tmp
-if [ ! -d "postgresql-16.1" ]; then
+if [ ! -f "postgresql-16.1.tar.gz" ]; then
     wget -q https://ftp.postgresql.org/pub/source/v16.1/postgresql-16.1.tar.gz
+fi
+if [ ! -d "postgresql-16.1" ]; then
     tar xzf postgresql-16.1.tar.gz
 fi
 
 cd postgresql-16.1
 
-# Platform-specific configuration
 if [ "$PLATFORM" = "linux" ] && [ "$ARCH" = "x64" ]; then
     CFLAGS="-fPIC -O3" ./configure \
-        --prefix=/tmp/pgsql \
+        --prefix=$INSTALL_PREFIX \
         --without-readline \
-        --with-openssl \
-        --with-includes="$CONAN_INCLUDE_DIRS" \
-        --with-libraries="$(echo $CONAN_LIB_DIRS | tr ':' ' ')"
+        --without-icu \
+        --with-openssl
 elif [ "$PLATFORM" = "linux" ] && [ "$ARCH" = "arm64" ]; then
     CC=aarch64-linux-gnu-gcc CFLAGS="-fPIC -O3" ./configure \
-        --prefix=/tmp/pgsql \
+        --prefix=$INSTALL_PREFIX \
         --host=aarch64-linux-gnu \
         --without-readline \
         --without-icu \
         --with-openssl \
-        --with-includes="$CONAN_INCLUDE_DIRS:/usr/aarch64-linux-gnu/include" \
-        --with-libraries="$(echo $CONAN_LIB_DIRS | tr ':' ' '):/usr/aarch64-linux-gnu/lib"
+        --with-includes="/usr/aarch64-linux-gnu/include" \
+        --with-libraries="/usr/aarch64-linux-gnu/lib"
 elif [ "$PLATFORM" = "win32" ]; then
     CC=x86_64-w64-mingw32-gcc ./configure \
-        --prefix=/tmp/pgsql \
+        --prefix=$INSTALL_PREFIX \
         --host=x86_64-w64-mingw32 \
         --without-readline \
         --without-icu \
         --without-zlib
+elif [ "$PLATFORM" = "darwin" ]; then
+    OPENSSL_PREFIX=$(brew --prefix openssl@3 2>/dev/null || echo "/usr/local/opt/openssl@3")
+    CFLAGS="-fPIC -O3" ./configure \
+        --prefix=$INSTALL_PREFIX \
+        --without-readline \
+        --without-icu \
+        --with-openssl \
+        --with-includes=${OPENSSL_PREFIX}/include \
+        --with-libraries=${OPENSSL_PREFIX}/lib
 fi
 
-make -C src/interfaces/libpq -j$(nproc)
+make -C src/interfaces/libpq -j$NPROC
 make -C src/interfaces/libpq install
 make -C src/bin/pg_config install
 make -C src/include install
-make -C src/common -j$(nproc)
-make -C src/port -j$(nproc)
+make -C src/common -j$NPROC
+make -C src/port -j$NPROC
 
-# Build libpqxx
-echo "Building libpqxx..."
+# Build libpqxx 7.10.4 (requires CMake)
+echo "Building libpqxx 7.10.4..."
 cd /tmp
-if [ ! -d "libpqxx-7.8.1" ]; then
-    wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.8.1.tar.gz
-    tar xzf 7.8.1.tar.gz
+if [ ! -f "7.10.4.tar.gz" ]; then
+    wget -q https://github.com/jtv/libpqxx/archive/refs/tags/7.10.4.tar.gz
+fi
+if [ ! -d "libpqxx-7.10.4" ]; then
+    tar xzf 7.10.4.tar.gz
 fi
 
-cd libpqxx-7.8.1
+cd libpqxx-7.10.4
+rm -rf build
+mkdir build && cd build
 
-if [ "$PLATFORM" = "linux" ] && [ "$ARCH" = "x64" ]; then
-    CXX="g++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure \
-        --prefix=/tmp/pgsql \
-        --enable-shared=no \
-        --with-postgres-include=/tmp/pgsql/include \
-        --with-postgres-lib=/tmp/pgsql/lib
-elif [ "$PLATFORM" = "linux" ] && [ "$ARCH" = "arm64" ]; then
-    CXX="aarch64-linux-gnu-g++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure \
-        --prefix=/tmp/pgsql \
-        --host=aarch64-linux-gnu \
-        --enable-shared=no \
-        --with-postgres-include=/tmp/pgsql/include \
-        --with-postgres-lib=/tmp/pgsql/lib
+CMAKE_ARGS="-DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
+    -DCMAKE_CXX_STANDARD=17 \
+    -DCMAKE_CXX_FLAGS=-fPIC \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DSKIP_BUILD_TEST=ON \
+    -DBUILD_DOC=OFF \
+    -DPostgreSQL_INCLUDE_DIR=$INSTALL_PREFIX/include \
+    -DPostgreSQL_LIBRARY=$INSTALL_PREFIX/lib/libpq.a \
+    -DPostgreSQL_TYPE_INCLUDE_DIR=$INSTALL_PREFIX/include"
+
+if [ "$PLATFORM" = "linux" ] && [ "$ARCH" = "arm64" ]; then
+    CMAKE_ARGS="$CMAKE_ARGS \
+        -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+        -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+        -DCMAKE_SYSTEM_NAME=Linux \
+        -DCMAKE_SYSTEM_PROCESSOR=aarch64"
 elif [ "$PLATFORM" = "win32" ]; then
-    CXX="x86_64-w64-mingw32-g++ -std=c++17" CXXFLAGS="-fPIC -O3" ./configure \
-        --prefix=/tmp/pgsql \
-        --host=x86_64-w64-mingw32 \
-        --enable-shared=no \
-        --with-postgres-include=/tmp/pgsql/include \
-        --with-postgres-lib=/tmp/pgsql/lib
+    CMAKE_ARGS="$CMAKE_ARGS \
+        -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+        -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+        -DCMAKE_SYSTEM_NAME=Windows \
+        -DCMAKE_SYSTEM_PROCESSOR=AMD64"
 fi
 
-make -j$(nproc)
-make install
+cmake .. $CMAKE_ARGS
+cmake --build . -j$NPROC
+cmake --install .
 
-echo "=== Conan setup complete ==="
-echo "Libraries installed to: /tmp/pgsql"
+echo "=== Build complete ==="
+echo "Libraries installed to: $INSTALL_PREFIX"
+echo "  Include: $INSTALL_PREFIX/include"
+echo "  Lib:     $INSTALL_PREFIX/lib"

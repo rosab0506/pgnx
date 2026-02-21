@@ -25,14 +25,12 @@ class PgnxDepsConan(ConanFile):
         basic_layout(self)
     
     def generate(self):
-        # Generate environment variables for node-gyp
-        deps_info = self.dependencies
-        
+        # Generate environment variables for node-gyp (Conan 2.x API)
         include_dirs = []
         lib_dirs = []
         libs = []
-        
-        for dep in deps_info.host_requires():
+
+        for require, dep in self.dependencies.host.items():
             cpp_info = dep.cpp_info.aggregated_components()
             include_dirs.extend(cpp_info.includedirs)
             lib_dirs.extend(cpp_info.libdirs)
